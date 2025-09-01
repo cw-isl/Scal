@@ -281,6 +281,7 @@ def month_filter(items, y, m):
 
 # === [SECTION: Weather (OpenWeatherMap API)] =================================
 _weather_cache = {"key": "", "loc": "", "ts": 0.0, "data": None}
+_air_cache = {"key": "", "loc": "", "ts": 0.0, "data": None}
 
 def _owm_geocode(q, key):
     url = "https://api.openweathermap.org/geo/1.0/direct"
@@ -362,6 +363,33 @@ def fetch_weather():
     except Exception:
         data = _owm_fetch_fiveday(lat, lon, key, units)
     _weather_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
+    return data
+
+def fetch_air_quality():
+    cfgw = CFG.get("weather", {})
+    key = cfgw.get("api_key", "").strip()
+    loc = cfgw.get("location", "").strip()
+    if not key or not loc:
+        return None
+    now = time.time()
+    cache_ok = (
+        _air_cache["data"] is not None
+        and _air_cache["key"] == key
+        and _air_cache["loc"] == loc
+        and now - _air_cache["ts"] < 600
+    )
+    if cache_ok:
+        return _air_cache["data"]
+    lat, lon = _owm_geocode(loc, key)
+    url = "https://api.openweathermap.org/data/2.5/air_pollution"
+    r = requests.get(url, params={"lat": lat, "lon": lon, "appid": key}, timeout=10)
+    r.raise_for_status()
+    js = r.json()
+    aqi = ((js.get("list") or [{}])[0].get("main") or {}).get("aqi")
+    labels = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
+    colors = {1: "#009966", 2: "#ffde33", 3: "#ff9933", 4: "#cc0033", 5: "#660099"}
+    data = {"aqi": aqi, "label": labels.get(aqi, "?"), "color": colors.get(aqi, "#fff")}
+    _air_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
 # === [SECTION: Bus (Seoul/Gyeonggi) API adapters] ============================
@@ -783,6 +811,14 @@ def api_weather():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.get("/api/air")
+def api_air():
+    try:
+        data = fetch_air_quality()
+        return jsonify(data or {"need_config": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.get("/api/photos")
 def api_photos():
     return jsonify(list_local_images())
@@ -892,6 +928,8 @@ BOARD_HTML = r"""
 .weather .w-day .hi { font-weight:800; font-size:16px; }
 .weather .w-day .lo { opacity:.75; font-size:14px; }
 
+  .aqi { align-self:flex-end; font-size:24px; font-weight:700; text-shadow:0 0 6px rgba(0,0,0,.65); }
+
 /* Background must stay behind content */
 .bg, .bg2 { z-index:-1; }
 .frame { position:relative; z-index:1; }
@@ -929,6 +967,7 @@ BOARD_HTML = r"""
       <div class="rows" id="bus-rows"></div>
     </div>
     <div class="weather blk" id="weather"></div>
+    <div class="aqi blk" id="aqi"></div>
   </div>
 </div>
 
@@ -1055,8 +1094,26 @@ async function loadWeather() {
 loadWeather();
 setInterval(loadWeather, 10 * 60 * 1000);
 
-// ===== Weather block (final: card-style 7-day forecast) =====
-// Verse block
+// ===== Air Quality block =====
+async function loadAQI() {
+  const box = document.getElementById('aqi');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/air');
+    const data = await r.json();
+    box.textContent = '';
+    if (data && data.need_config) { box.textContent = 'OWM API Key required'; return; }
+    if (!data || data.error)     { box.textContent = 'AQI error'; return; }
+    box.textContent = 'AQI: ' + data.label;
+    if (data.color) box.style.color = data.color;
+  } catch (e) {
+    box.textContent = 'Failed to load AQI';
+  }
+}
+loadAQI();
+setInterval(loadAQI, 10 * 60 * 1000);
+
+// ===== Verse block =====
 async function loadVerse(){
   try{
     const r = await fetch('/api/verse');
