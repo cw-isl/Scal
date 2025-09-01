@@ -1,3 +1,55 @@
+
+
+# ======= EMBEDDED BLOCKS (auto-managed by Telegram commands) ===============
+# ==== EMBEDDED_CONFIG (YAML) START
+EMBEDDED_CONFIG = r"""server:
+  port: 5320
+
+frame:
+  tz: Asia/Seoul
+  ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
+
+weather:
+  provider: openweathermap
+  api_key: 9809664c22a3501382380f2781e1a9da
+  location: Seoul, South Korea
+  units: metric
+
+telegram:
+  bot_token: 7523443246:AAF-fHGcw4NLgDQDRbDz7j1xOTEFYfeZPQ0
+  allowed_user_ids:
+    - 5517670242
+  mode: polling
+  webhook_base: ''
+  path_secret: ''
+
+google:
+  scopes:
+    - https://www.googleapis.com/auth/calendar
+  calendar:
+    id: bob.gondrae@gmail.com
+
+todoist:
+  api_token: "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b"
+
+# ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
+bus:
+  region: seoul            # seoul | gyeonggi
+  seoul:
+    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
+    ars_id: "39516"        # 서울은 arsId
+  gyeonggi:
+    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
+    station_id: "200000078"
+  max_items: 8
+  routes_whitelist: ["14-1","47","62","532","1302"]     # ["7016","M7106"] 처럼 문자열로!
+"""
+# ==== EMBEDDED_CONFIG (YAML) END
+
+# ==== EMBEDDED_VERSES START
+EMBEDDED_VERSES = r"""테스트"""
+# ==== EMBEDDED_VERSES END
+# ===========================================================================
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -22,6 +74,70 @@ import requests
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 import telebot
+# ======= Embedded-block helpers (final) ======================================
+import io, tempfile, os, yaml
+
+CFG_START = "# ==== EMBEDDED_CONFIG (YAML) START"
+CFG_END   = "# ==== EMBEDDED_CONFIG (YAML) END"
+VER_START = "# ==== EMBEDDED_VERSES START"
+VER_END   = "# ==== EMBEDDED_VERSES END"
+
+def _extract_block(src_text: str, start_tag: str, end_tag: str):
+    s = src_text.find(start_tag); e = src_text.find(end_tag)
+    if s == -1 or e == -1 or e <= s:
+        raise RuntimeError(f"Marker not found: {start_tag}..{end_tag}")
+    s_body = src_text.find("\n", s) + 1
+    e_body = e
+    return s_body, e_body, src_text[s_body:e_body]
+
+def _replace_block_in_text(src_text: str, start_tag: str, end_tag: str, new_body: str) -> str:
+    s_body, e_body, _old = _extract_block(src_text, start_tag, end_tag)
+    if not new_body.endswith("\n"): new_body += "\n"
+    return src_text[:s_body] + new_body + src_text[e_body:]
+
+def _atomic_write(path: str, data: str):
+    d = os.path.dirname(os.path.abspath(path)) or "."
+    with tempfile.NamedTemporaryFile("w", delete=False, dir=d, encoding="utf-8") as tmp:
+        tmp.write(data); tmp.flush(); os.fsync(tmp.fileno())
+        tmp_path = tmp.name
+    os.replace(tmp_path, path)
+
+def _read_block(start_tag: str, end_tag: str, file_path: str = __file__) -> str:
+    with open(file_path, "r", encoding="utf-8") as f:
+        src = f.read()
+    _, _, body = _extract_block(src, start_tag, end_tag)
+    # If wrapped as VAR = r"""...""", return only the inner text
+    import re as _re
+    m = _re.search(r'r?"""\s*([\s\S]*?)\s*"""', body)
+    return (m.group(1) if m else body)
+
+def _write_block(new_text: str, start_tag: str, end_tag: str, file_path: str = __file__):
+    with open(file_path, "r", encoding="utf-8") as f:
+        src = f.read()
+    varname = "EMBEDDED_CONFIG" if "CONFIG" in start_tag else "EMBEDDED_VERSES"
+    wrapped = varname + ' = r"""' + new_text + '"""' 
+    _atomic_write(file_path, _replace_block_in_text(src, start_tag, end_tag, wrapped))
+
+def load_config_from_embedded(defaults: dict):
+    data = yaml.safe_load(_read_block(CFG_START, CFG_END)) or {}
+    def deep_fill(dst, src):
+        for k, v in src.items():
+            if k not in dst:
+                dst[k] = v
+            elif isinstance(v, dict):
+                dst[k] = deep_fill(dst.get(k, {}) or {}, v)
+        return dst
+    return deep_fill(data, defaults)
+
+def save_config_to_source(new_yaml_text: str, file_path: str = __file__):
+    _write_block(new_yaml_text, CFG_START, CFG_END, file_path=file_path)
+
+def get_verse() -> str:
+    return _read_block(VER_START, VER_END).strip()
+
+def set_verse(text: str):
+    _write_block((text or "").strip(), VER_START, VER_END)
+# ===========================================================================
 
 # === [SECTION: Optional Google libraries (lazy check)] =======================
 # - 구글 라이브러리가 없을 수 있으므로 임포트 시도 후 플래그만 세팅
@@ -40,10 +156,8 @@ STATE_PATH = BASE / "sframe_state.json"
 PHOTOS_DIR = BASE / "frame_photos"
 GCLIENT_PATH = BASE / "google_client_secret.json"
 GTOKEN_PATH = BASE / "google_token.json"
-VERSE_PATH = BASE / "verse.txt"  # verse storage
 BASE.mkdir(parents=True, exist_ok=True)
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
-if not VERSE_PATH.exists(): VERSE_PATH.write_text("", encoding="utf-8")
 
 # === [SECTION: Default configuration structure] ==============================
 DEFAULT_CFG = {
@@ -65,13 +179,14 @@ DEFAULT_CFG = {
     "google": {
         "scopes": ["https://www.googleapis.com/auth/calendar.events"],
         "calendar": {"id": "primary"}
-    },
+
+},
     # Todoist (yaml에서 설정) — 여기 값은 기본값
     "todoist": {
         "api_token": "",                   # yaml에 넣은 토큰 사용; 비어있으면 비활성
         "filter": "today | overdue",       # Todoist filter query
         "project_id": "",                  # optional: limit to project
-        "max_items": 14                    # UI는 좌7/우7
+        "max_items": 20                    # UI는 좌10/우10
     },
     # Bus (서울/경기) 설정
     "bus": {
@@ -82,8 +197,9 @@ DEFAULT_CFG = {
         "routes_whitelist": []             # 예: ["7016","M7106"] 비워두면 전체
     }
 }
+CFG = load_config_from_embedded(DEFAULT_CFG)
 
-# === [SECTION: YAML loader + default writer] =================================
+# === [SECTION: YAML loader + default writer] ===============================
 def load_yaml(p: Path, defaults: dict):
     """Load YAML with defaults; write default file if missing."""
     if not p.exists():
@@ -98,8 +214,6 @@ def load_yaml(p: Path, defaults: dict):
                 dst[k] = deep_fill(dst.get(k, {}) or {}, v)
         return dst
     return deep_fill(data, defaults)
-
-CFG = load_yaml(CFG_PATH, DEFAULT_CFG)
 
 # === [SECTION: Timezone utilities] ===========================================
 TZ = timezone(timedelta(hours=9)) if CFG["frame"]["tz"] == "Asia/Seoul" else timezone.utc
@@ -403,13 +517,17 @@ app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE="None")
 
 # === [SECTION: Verse helpers + API endpoints] ================================
 def get_verse() -> str:
-    try:
-        return VERSE_PATH.read_text(encoding="utf-8").strip()
-    except Exception:
-        return ""
+    # 위에서 선언한 공용 헬퍼 사용
+    return _read_block(VER_START, VER_END).strip()
 
 def set_verse(text: str):
-    VERSE_PATH.write_text((text or "").strip(), encoding="utf-8")
+    # 소스의 EMBEDDED_VERSES 블록을 즉시 갱신
+    _write_block((text or "").strip(), VER_START, VER_END)
+    # 선택: 텍스트 파일도 함께 갱신(원하셨던 verse txt 파일)
+    try:
+        (BASE / "verse.txt").write_text((text or "").strip() + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
 @app.get("/api/verse")
 def api_verse():
@@ -440,7 +558,7 @@ def todoist_list_tasks():
     r.raise_for_status()
     items = r.json()
     out = []
-    max_items = int(cfg.get("max_items", 14))
+    max_items = int(cfg.get("max_items", 20))
     for t in items[:max_items]:
         out.append({
             "id": t.get("id"),
@@ -690,8 +808,8 @@ BOARD_HTML = r"""
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <title>Smart Frame</title>
 <style>
-  :root { --W:1080px; --H:1920px; --top:100px; --cal:910px;
-          --bus:150px; --weather:150px; --todo:510px; } /* todo -100px */
+  :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
+          --bus:280px; --weather:280px; --todo:360px; } /* todo -100px */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -730,22 +848,12 @@ BOARD_HTML = r"""
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-  /* Weather block */
-  .weather { flex:0 0 var(--weather); display:flex; align-items:center; gap:20px; }
-  .w-now { display:flex; align-items:center; gap:8px; min-width:150px;}
-  .w-now img { width:56px; height:56px; }
-  .w-now .temp { font-size:40px; font-weight:800; line-height:1; text-shadow:0 0 6px rgba(0,0,0,.65);}
-  .w-days { display:flex; justify-content:space-between; gap:12px; width:100%; }
-  .w-day { text-align:center; flex:1 1 0; min-width:0; }
-  .w-day img { width:42px; height:42px; }
-  .w-day .hi { font-weight:700; }
-
-  .todo{ flex:1 1 var(--todo); display:flex; flex-direction:column;}
+.todo{ flex:1 1 var(--todo); display:flex; flex-direction:column;}
   .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
   .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
-  .todo .item { display:flex; justify-content:space-between; gap:10px; font-size:14px; }
+  .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
   .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .todo .due { opacity:.9; }
+  .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
   .bus{flex:0 0 var(--bus);}
   .bus .rows { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; }
@@ -757,6 +865,37 @@ BOARD_HTML = r"""
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; align-items:flex-start; gap:12px; }
   .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
+
+/* Weather layout (card style 7-day forecast) */
+.weather { display:flex; gap:16px; align-items:center; }
+.weather .w-now { display:flex; align-items:center; gap:12px; min-width:180px; }
+.weather .w-now .temp { font-size:44px; font-weight:800; line-height:1; }
+
+.weather .w-days {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:12px;
+  width:100%;
+  align-items:stretch;
+}
+.weather .w-day {
+  text-align:center;
+  background:rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  padding:10px 6px;
+  min-width:0;
+}
+.weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
+.weather .w-day img { width:72px; height:72px; display:block; margin:6px auto; }
+.weather .w-day .temps { display:flex; justify-content:center; gap:8px; font-size:14px; margin-top:4px; }
+.weather .w-day .hi { font-weight:800; font-size:16px; }
+.weather .w-day .lo { opacity:.75; font-size:14px; }
+
+/* Background must stay behind content */
+.bg, .bg2 { z-index:-1; }
+.frame { position:relative; z-index:1; }
+
 </style>
 </head>
 <body>
@@ -771,7 +910,7 @@ BOARD_HTML = r"""
 
   <div class="cal">
     <h2 id="cal-title">Calendar</h2>
-    <div class="dow"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
+    <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
     <div class="grid" id="grid"></div>
   </div>
 
@@ -803,7 +942,7 @@ function tick(){
 }
 setInterval(tick, 1000); tick();
 
-function startOfWeek(d){ const day=(d.getDay()+6)%7; const s=new Date(d); s.setDate(d.getDate()-day); s.setHours(0,0,0,0); return s; }
+function startOfWeek(d){ const day=d.getDay(); const s=new Date(d); s.setDate(d.getDate()-day); s.setHours(0,0,0,0); return s; }
 
 async function loadEvents(){
   const d=new Date();
@@ -840,42 +979,83 @@ async function loadEvents(){
 }
 loadEvents(); setInterval(loadEvents, 5*60*1000);
 
-// Weather block
-async function loadWeather(){
+
+
+
+// ===== Weather block (final: card-style 7-day forecast) =====
+async function loadWeather() {
   const box = document.getElementById('weather');
-  try{
+  try {
     const r = await fetch('/api/weather');
     const data = await r.json();
     box.innerHTML = '';
 
-    if(data && data.need_config){ box.textContent='OWM API Key required'; return; }
-    if(!data || data.error){ box.textContent='Weather error'; return; }
+    if (data && data.need_config) { box.textContent = 'OWM API Key required'; return; }
+    if (!data || data.error)     { box.textContent = 'Weather error';       return; }
 
-    const now = document.createElement('div'); now.className='w-now';
-    const i = document.createElement('img'); i.src=data.current.icon; i.alt='';
-    const t = document.createElement('div'); t.className='temp'; t.textContent = data.current.temp + '';
+    // Current (left)
+    const now = document.createElement('div');
+    now.className = 'w-now';
+    const i = document.createElement('img');
+    i.src = data.current.icon; i.alt = '';
+    i.style.width = '70px'; i.style.height = '70px';
+    const t = document.createElement('div');
+    t.className = 'temp';
+    t.textContent = data.current.temp + '°';
     now.appendChild(i); now.appendChild(t);
 
-    const days = document.createElement('div'); days.className='w-days';
-    const names=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    for(const d of data.days){
+    // 7-day cards (right)
+    const days = document.createElement('div');
+    days.className = 'w-days';
+    const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const todayIso = new Date().toISOString().slice(0,10);
+
+    for (const d of data.days) {
       const dt = new Date(d.date);
-      const item=document.createElement('div'); item.className='w-day';
-      const nm=document.createElement('div'); nm.textContent=names[dt.getDay()];
-      const im=document.createElement('img'); im.src=d.icon; im.alt='';
-      const hi=document.createElement('div'); hi.className='hi'; hi.textContent=d.max+'';
-      const lo=document.createElement('div'); lo.className='lo'; lo.textContent=d.min+'';
-      item.appendChild(nm); item.appendChild(im); item.appendChild(hi); item.appendChild(lo);
+
+      const item = document.createElement('div');
+      item.className = 'w-day';
+      if (d.date === todayIso) item.classList.add('today');
+
+      const nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = names[dt.getDay()];
+
+      const im = document.createElement('img');
+      im.src = d.icon; im.alt = '';
+
+      const temps = document.createElement('div');
+      temps.className = 'temps';
+
+      const hi = document.createElement('div');
+      hi.className = 'hi';
+      hi.textContent = d.max + '°';
+
+      const lo = document.createElement('div');
+      lo.className = 'lo';
+      lo.textContent = d.min + '°';
+
+      temps.appendChild(hi);
+      temps.appendChild(lo);
+
+      item.appendChild(nm);
+      item.appendChild(im);
+      item.appendChild(temps);
+
       days.appendChild(item);
     }
 
-    box.appendChild(now); box.appendChild(days);
-  }catch(e){
-    box.textContent = 'Failed to load weather';
+    box.appendChild(now);
+    box.appendChild(days);
+  } catch (e) {
+    const box2 = document.getElementById('weather');
+    if (box2) box2.textContent = 'Failed to load weather';
   }
 }
-loadWeather(); setInterval(loadWeather, 10*60*1000);
+loadWeather();
+setInterval(loadWeather, 10 * 60 * 1000);
 
+// ===== Weather block (final: card-style 7-day forecast) =====
 // Verse block
 async function loadVerse(){
   try{
@@ -919,20 +1099,20 @@ async function loadTodo(){
       return;
     }
 
-    const first7 = data.slice(0,7);
-    const next7  = data.slice(7,14);
+    const first10 = data.slice(0,10);
+    const next10  = data.slice(10,20);
 
-    for (const t of first7){
+    for (const t of first10){
       const row = document.createElement('div'); row.className='item';
-      const left = document.createElement('div'); left.className='title'; left.textContent = t.title || '(untitled)';
-      const right = document.createElement('div'); right.className='due'; right.textContent = fmtDue(t.due);
-      row.appendChild(left); row.appendChild(right); c1.appendChild(row);
+      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
+      row.appendChild(date); row.appendChild(title); c1.appendChild(row);
     }
-    for (const t of next7){
+    for (const t of next10){
       const row = document.createElement('div'); row.className='item';
-      const left = document.createElement('div'); left.className='title'; left.textContent = t.title || '(untitled)';
-      const right = document.createElement('div'); right.className='due'; right.textContent = fmtDue(t.due);
-      row.appendChild(left); row.appendChild(right); c2.appendChild(row);
+      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
+      row.appendChild(date); row.appendChild(title); c2.appendChild(row);
     }
   }catch(e){
     // ignore
@@ -981,45 +1161,182 @@ async function loadBus(){
 }
 loadBus(); setInterval(loadBus, 15*1000);
 
-// ===== Background photo crossfade =====
-let photoList=[], pi=0, front=1;
+// ===== Background photo crossfade (delay-optimized & path-safe) =====
+// - /api/photos 목록 셔플
+// - 세그먼트별 URL 인코딩(하위 폴더 유지)
+// - Image().decode()로 미리 디코드 후 전환
+// - 초기 한 장은 화면에 바로 세팅하고 큐에서 소비 → 첫 전환 즉시 다른 사진
+// - 탭 비활성화 시 타이머 일시중지
 
+let photoList = [];
+let pi = 0;           // 사진 인덱스
+let front = 1;        // 현재 보이는 레이어: 1=bg1, 2=bg2
+
+const DISPLAY_INTERVAL_MS = 5000;
+const PRELOAD_MIN_COUNT   = 2;
+const PRELOAD_COOLDOWN_MS = 250;
+
+let preloadQueue = [];     // [{ url, readyAt }]
+let isPreloading = false;
+let nextSwitchAt = 0;
+let slideTimer = null;
+let refillTimer = null;
+
+// --- 유틸: 세그먼트별 인코딩(하위 폴더 유지) -------------------------------
+function buildPhotoUrl(name){
+  // "a/b c.jpg" -> "/photos/a/b%20c.jpg"
+  return '/photos/' + String(name).split('/').map(encodeURIComponent).join('/');
+}
+
+// --- 유틸: 배열 셔플 -------------------------------------------------------
+function shuffle(arr){
+  for (let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// --- 목록 로드 --------------------------------------------------------------
 async function loadPhotos(){
   try{
     const r = await fetch('/api/photos');
     photoList = await r.json();
-    // shuffle
-    for (let i=photoList.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1)); [photoList[i],photoList[j]]=[photoList[j],photoList[i]];
-    }
-  }catch(e){ console.error(e); photoList=[]; }
+    shuffle(photoList);
+  }catch(e){
+    console.error('[photos] load failed:', e);
+    photoList = [];
+  }
 }
 
-function showNextPhoto(){
-  if (!photoList.length) return;
-  const next = photoList[pi % photoList.length]; pi++;
-  const url = '/photos/' + encodeURIComponent(next);
-  const a = document.getElementById(front===1?'bg2':'bg1');
-  a.style.backgroundImage = `url("${url}")`;
+// --- 이미지 1장 프리로드(+decode) -----------------------------------------
+function preloadOne(url){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    let done = false;
+    const finish = ok => { if (!done){ done = true; resolve(ok ? img : null); } };
+    img.onload = ()=>{
+      if (img.decode){
+        img.decode().then(()=>finish(true)).catch(()=>finish(true));
+      }else{
+        finish(true);
+      }
+    };
+    img.onerror = ()=> finish(null);
+    img.src = url;
+  });
+}
+
+// --- 프리로드 큐 보충 ------------------------------------------------------
+async function ensurePreloaded(){
+  if (isPreloading) return;
+  isPreloading = true;
+  try{
+    while (preloadQueue.length < PRELOAD_MIN_COUNT && photoList.length){
+      const name = photoList[pi % photoList.length]; pi++;
+      const url  = buildPhotoUrl(name);
+      const ok   = await preloadOne(url);
+      if (ok){
+        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS });
+      }
+    }
+  }finally{
+    isPreloading = false;
+  }
+}
+
+// --- 실제 전환 --------------------------------------------------------------
+function swapBackground(nextUrl){
+  const incoming = document.getElementById(front === 1 ? 'bg2' : 'bg1'); // 들어올 레이어(현재 투명)
+  incoming.style.backgroundImage = `url("${nextUrl}")`;
   // reflow
-  a.offsetHeight;
-  a.style.opacity = 1;
-  const b = document.getElementById(front===1?'bg1':'bg2');
-  b.style.opacity = 0;
+  incoming.offsetHeight;
+  incoming.style.opacity = 1;
+
+  const outgoing = document.getElementById(front === 1 ? 'bg1' : 'bg2'); // 나갈 레이어(현재 보임)
+  outgoing.style.opacity = 0;
+
   front = 3 - front;
 }
 
-(async ()=>{
-  await loadPhotos();
-  if (photoList.length){
-    const b1=document.getElementById('bg1');
-    const b2=document.getElementById('bg2');
-    b1.style.backgroundImage = `url("/photos/${encodeURIComponent(photoList[0])}")`;
-    if (photoList.length>1) b2.style.backgroundImage = `url("/photos/${encodeURIComponent(photoList[1])}")`;
+// --- 한 스텝 전환 ----------------------------------------------------------
+async function showNextPhoto(){
+  if (!photoList.length) return;
+
+  await ensurePreloaded();
+  if (!preloadQueue.length) return;
+
+  const now = Date.now();
+  if (now < nextSwitchAt) return;
+
+  const { url, readyAt } = preloadQueue[0];
+  if (now < readyAt) return;
+
+  preloadQueue.shift();
+  swapBackground(url);
+  nextSwitchAt = now + DISPLAY_INTERVAL_MS;
+
+  // 백그라운드 프리로드
+  ensurePreloaded();
+}
+
+// --- 타이머 컨트롤/가시성 대응 --------------------------------------------
+function stopPhotoTimers(){
+  if (slideTimer){ clearInterval(slideTimer); slideTimer = null; }
+  if (refillTimer){ clearInterval(refillTimer); refillTimer = null; }
+}
+function startPhotoTimers(){
+  if (!slideTimer){
+    slideTimer = setInterval(showNextPhoto, DISPLAY_INTERVAL_MS);
   }
-  setInterval(async ()=>{ if (!photoList.length) await loadPhotos(); }, 60*1000);
-  setInterval(showNextPhoto, 5000);
-  showNextPhoto();
+  if (!refillTimer){
+    refillTimer = setInterval(async ()=>{
+      if (!photoList.length){
+        await loadPhotos();
+      }
+      ensurePreloaded();
+    }, 60 * 1000);
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden){
+    stopPhotoTimers();
+  }else{
+    nextSwitchAt = Date.now();
+    startPhotoTimers();
+  }
+});
+
+// --- 초기화(IIFE) -----------------------------------------------------------
+(async ()=>{
+  stopPhotoTimers();
+
+  await loadPhotos();
+  if (!photoList.length){
+    return;
+  }
+
+  await ensurePreloaded();
+
+  const b1 = document.getElementById('bg1');
+  const b2 = document.getElementById('bg2');
+
+  // 초기 1장 화면 세팅(큐에서 소비)
+  if (preloadQueue[0]){
+    const first = preloadQueue.shift();
+    b1.style.backgroundImage = `url("${first.url}")`;
+    b1.style.opacity = 1;
+    b2.style.opacity = 0;
+    front = 1;
+    nextSwitchAt = Date.now() + DISPLAY_INTERVAL_MS;
+  }
+
+  // 다음 전환용으로 숨김 레이어 미리 세팅(있다면)
+  if (preloadQueue[0]){
+    b2.style.backgroundImage = `url("${preloadQueue[0].url}")`;
+  }
+
+  startPhotoTimers();
+  showNextPhoto(); // 준비됐으면 바로 1회 시도
 })();
 </script>
 </body>
@@ -1030,7 +1347,8 @@ function showNextPhoto(){
 def board():
     return render_template_string(BOARD_HTML)
 
-# === [SECTION: Bot state helpers (persist to json file)] =====================
+# === [SECTION: Bot state helpers (persist to json file)] ===
+
 def load_state():
     if not STATE_PATH.exists():
         return {}
@@ -1405,7 +1723,7 @@ if TB:
             if not (new_url.startswith("http://") or new_url.startswith("https://")):
                 TB.reply_to(m, "Invalid URL. Please send http/https URL."); return
             CFG["frame"]["ical_url"] = new_url
-            CFG_PATH.write_text(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             global _ical_cache
             _ical_cache = {"url": None, "ts": 0.0, "events": []}
             TB.reply_to(m, "iCal URL updated. Board will auto-refresh in ~1-2 min.")
@@ -1426,7 +1744,7 @@ if TB:
             if val not in ("seoul","gyeonggi"):
                 TB.reply_to(m, "Invalid. Type seoul or gyeonggi."); return
             CFG["bus"]["region"] = val
-            CFG_PATH.write_text(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, f"Bus region set to {val}.")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
@@ -1439,7 +1757,7 @@ if TB:
                 CFG["bus"]["seoul"]["ars_id"] = val
             else:
                 CFG["bus"]["gyeonggi"]["station_id"] = val
-            CFG_PATH.write_text(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, f"Bus stop updated ({rgn}).")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
@@ -1452,7 +1770,7 @@ if TB:
             else:
                 parts = [x.strip() for x in re.split(r"[,\s]+", txt) if x.strip()]
                 CFG["bus"]["routes_whitelist"] = parts
-            CFG_PATH.write_text(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, "Routes filter updated.")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
@@ -1534,7 +1852,7 @@ def start_telegram():
             return start_polling()
         secret = CFG["telegram"].get("path_secret") or secrets.token_urlsafe(24)
         CFG["telegram"]["path_secret"] = secret
-        CFG_PATH.write_text(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
         hook_url = f"{base}/tg/{secret}"
         TB.remove_webhook()
         TB.set_webhook(url=hook_url, drop_pending_updates=True)
@@ -1651,3 +1969,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ======= Embedded-block helpers (override for wrapped form) ==================
+def _read_block(start_tag: str, end_tag: str, file_path: str = __file__) -> str:
+    with open(file_path, "r", encoding="utf-8") as f:
+        src = f.read()
+    s_body, e_body, body = _extract_block(src, start_tag, end_tag)
+    import re as _re
+    m = _re.search(r'r?"""\s*([\s\S]*?)\s*"""', body)
+    return (m.group(1) if m else body)
+
+def _write_block(new_text: str, start_tag: str, end_tag: str, file_path: str = __file__):
+    with open(file_path, "r", encoding="utf-8") as f:
+        src = f.read()
+    s_body, e_body, body = _extract_block(src, start_tag, end_tag)
+    varname = "EMBEDDED_CONFIG" if "CONFIG" in start_tag else "EMBEDDED_VERSES"
+    wrapped = f"{varname} = r\"\"\"{new_text}\"\"\""
+    if not wrapped.endswith("\n"):
+        wrapped += "\n"
+    new_src = src[:s_body] + wrapped + src[e_body:]
+    _atomic_write(file_path, new_src)
+# ============================================================================
