@@ -368,7 +368,7 @@ def fetch_weather():
     _weather_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
-# --- Air quality ------------------------------------------------------------
+
 def fetch_air_quality():
     cfgw = CFG.get("weather", {})
     key = cfgw.get("api_key", "").strip()
@@ -942,23 +942,6 @@ BOARD_HTML = r"""
 .weather .w-day .hi { font-weight:800; font-size:16px; }
 .weather .w-day .lo { opacity:.75; font-size:14px; }
 
-/* ▼ AQI card on the right */
-.weather .w-aqi {
-  width:120px;
-  text-align:center;
-  background:rgba(0,0,0,.25);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:12px;
-  padding:10px 6px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  gap:6px;
-  margin-left:auto;
-}
-.weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
-.weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
-.weather .w-aqi .lbl { font-size:14px; opacity:.9; }
 
 /* Background must stay behind content */
 .bg, .bg2 { z-index:-1; }
@@ -997,6 +980,7 @@ BOARD_HTML = r"""
       <div class="rows" id="bus-rows"></div>
     </div>
     <div class="weather blk" id="weather"></div>
+    <div class="aqi blk" id="aqi"></div>
   </div>
 </div>
 
@@ -1133,6 +1117,7 @@ async function loadWeather() {
 }
 loadWeather();
 setInterval(loadWeather, 10 * 60 * 1000);
+
 
 // ===== Verse block =====
 async function loadVerse(){
