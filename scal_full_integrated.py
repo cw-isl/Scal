@@ -33,15 +33,15 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: seoul            # seoul | gyeonggi
+  region: ''            # seoul | gyeonggi
   seoul:
-    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
-    ars_id: "39516"        # 서울은 arsId
+    api_key: ""
+    ars_id: ""        # 서울은 arsId
   gyeonggi:
-    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
-    station_id: "200000078"
+    api_key: ""
+    station_id: ""
   max_items: 8
-  routes_whitelist: ["14-1","47","62","532","1302"]     # ["7016","M7106"] 처럼 문자열로!
+  routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
@@ -73,9 +73,16 @@ from datetime import datetime, timezone, timedelta, date
 
 import yaml
 import requests
-from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response
+from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response, send_file
 from werkzeug.middleware.proxy_fix import ProxyFix
 import telebot
+# Bus stop LED panel helpers
+import sys
+sys.path.append(str(Path(__file__).parent / "panel"))
+try:
+    from xylopanel import BusPanel
+except Exception:
+    BusPanel = None
 # ======= Embedded-block helpers (final) ======================================
 import io, tempfile, os, yaml
 
@@ -537,6 +544,32 @@ def fetch_bus():
             return {"need_config": True, "region": "gyeonggi"}
         return fetch_bus_gyeonggi(key, sid, whitelist=wl, max_items=max_items)
 
+
+def build_businfo_image(items):
+    """Render bus arrival info to an image using xylopanel.BusPanel.
+
+    Items should be a list of dicts with keys: route, msg1, msg2.
+    Returns a PIL.Image or None if BusPanel is unavailable.
+    """
+    if BusPanel is None:
+        return None
+    panel = BusPanel()
+    for it in items[:6]:  # panel shows up to 6 entries (3x2)
+        line = it.get("route", "")
+        msg = it.get("msg1", "")
+        m = re.search(r"(\d+)\s*분", msg)
+        if m:
+            mins = int(m.group(1))
+        elif "종료" in msg:
+            mins = panel.end
+        elif "차고지" in msg:
+            mins = panel.depot
+        else:
+            mins = 0
+        lowdeck = "저상" in msg
+        panel.add_bus(line, time=mins, lowdeck=lowdeck)
+    return panel.get_image()
+
 # === [SECTION: Photo file listing for board background] ======================
 def list_local_images():
     exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -844,6 +877,21 @@ def api_bus():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.get("/businfo.png")
+def businfo_png():
+    try:
+        data = fetch_bus()
+        img = build_businfo_image((data or {}).get("items", []))
+        if img is None:
+            abort(404)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png")
+    except Exception:
+        abort(500)
+
 # === [SECTION: Board HTML (legacy UI; monthly calendar + photo fade)] ========
 BOARD_HTML = r"""
 <!doctype html>
@@ -854,7 +902,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:210px; --weather:280px; --todo:270px; } /* todo height trimmed */
+          --bus:210px; --businfo:80px; --weather:280px; --todo:270px; } /* todo height trimmed */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -906,6 +954,9 @@ BOARD_HTML = r"""
   .bus .route { font-weight:700; min-width:48px; }
   .bus .msgs { display:flex; gap:12px; opacity:.95; }
   .bus .meta { opacity:.9; font-size:13px; }
+
+  .businfo{flex:0 0 var(--businfo); display:flex; flex-direction:column; align-items:center;}
+  .businfo img{width:100%; height:auto; image-rendering:pixelated;}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
@@ -1001,6 +1052,10 @@ BOARD_HTML = r"""
       <h3>Bus</h3>
       <div class="meta" id="bus-meta"></div>
       <div class="rows" id="bus-rows"></div>
+    </div>
+    <div class="businfo blk">
+      <h3>Bus Info</h3>
+      <img id="businfo-img" alt="bus info"/>
     </div>
     <div class="weather blk" id="weather"></div>
   </div>
@@ -1250,6 +1305,13 @@ async function loadBus(){
   }
 }
 loadBus(); setInterval(loadBus, 15*1000);
+
+// ===== Bus info image =====
+function loadBusInfoImg(){
+  const img = document.getElementById('businfo-img');
+  if(img) img.src = '/businfo.png?t=' + Date.now();
+}
+loadBusInfoImg(); setInterval(loadBusInfoImg, 15*1000);
 
 // ===== Background photo crossfade (delay-optimized & path-safe) =====
 // - /api/photos 목록 셔플
