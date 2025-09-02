@@ -56,7 +56,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 ( /cal menu is merged into /set -> '6) Manage Events' )
 (UI restores sframe's older 'Monthly Calendar + Photo Fade' layout)
 
-+ Todoist: fetch tasks and render in 2 columns (7 items each)
++ Todoist: fetch tasks and render in 2 columns (5 items each)
 + Verse: /set -> verse input that shows on board
 + Bot duplication guard (file lock) to avoid double polling
 + Bus (Seoul/Gyeonggi): real APIs + stop change via Telegram + board display
@@ -187,7 +187,7 @@ DEFAULT_CFG = {
         "api_token": "",                   # yaml에 넣은 토큰 사용; 비어있으면 비활성
         "filter": "today | overdue",       # Todoist filter query
         "project_id": "",                  # optional: limit to project
-        "max_items": 20                    # UI는 좌10/우10
+        "max_items": 10                    # UI는 좌5/우5
     },
     # Bus (서울/경기) 설정
     "bus": {
@@ -580,7 +580,7 @@ def todoist_headers():
 def todoist_list_tasks():
     """
     Fetch open tasks via REST v2.
-    Respects filter/project_id; returns trimmed fields up to max_items (default 14).
+    Respects filter/project_id; returns trimmed fields up to max_items (default 10).
     """
     base = "https://api.todoist.com/rest/v2/tasks"
     cfg = CFG.get("todoist", {}) or {}
@@ -594,7 +594,7 @@ def todoist_list_tasks():
     r.raise_for_status()
     items = r.json()
     out = []
-    max_items = int(cfg.get("max_items", 20))
+    max_items = int(cfg.get("max_items", 10))
     for t in items[:max_items]:
         out.append({
             "id": t.get("id"),
@@ -853,7 +853,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:240px; --weather:280px; --todo:360px; } /* todo -100px */
+          --bus:210px; --weather:280px; --todo:200px; } /* todo adjusted */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -1157,7 +1157,7 @@ async function loadVerse(){
 }
 loadVerse(); setInterval(loadVerse, 10*1000);
 
-// ===== Todo block (Todoist, 2 columns, 7 each) =====
+// ===== Todo block (Todoist, 2 columns, 5 each) =====
 function fmtDue(v){
   if(!v) return '';
   const d = new Date(v);
@@ -1188,16 +1188,16 @@ async function loadTodo(){
       return;
     }
 
-    const first10 = data.slice(0,10);
-    const next10  = data.slice(10,20);
+    const first5 = data.slice(0,5);
+    const next5  = data.slice(5,10);
 
-    for (const t of first10){
+    for (const t of first5){
       const row = document.createElement('div'); row.className='item';
       const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
       const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
       row.appendChild(date); row.appendChild(title); c1.appendChild(row);
     }
-    for (const t of next10){
+    for (const t of next5){
       const row = document.createElement('div'); row.className='item';
       const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
       const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
