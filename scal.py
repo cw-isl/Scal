@@ -387,10 +387,16 @@ def fetch_air_quality():
     r = requests.get(url, params={"lat": lat, "lon": lon, "appid": key}, timeout=10)
     r.raise_for_status()
     js = r.json()
-    aqi = ((js.get("list") or [{}])[0].get("main") or {}).get("aqi")
+    first = (js.get("list") or [{}])[0]
+    aqi = (first.get("main") or {}).get("aqi")
+    comps = first.get("components") or {}
     labels = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
     colors = {1: "#009966", 2: "#ffde33", 3: "#ff9933", 4: "#cc0033", 5: "#660099"}
     data = {"aqi": aqi, "label": labels.get(aqi, "?"), "color": colors.get(aqi, "#fff")}
+    for k in ("pm2_5", "pm10", "no2", "o3", "so2", "co", "nh3"):
+        v = comps.get(k)
+        if v is not None:
+            data[k] = v
     _air_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
@@ -942,21 +948,22 @@ BOARD_HTML = r"""
 
 /* ▼ AQI card on the right */
 .weather .w-aqi {
-  width:120px;
+  width:140px;
   text-align:center;
   background:rgba(0,0,0,.25);
   border:1px solid rgba(255,255,255,.08);
   border-radius:12px;
-  padding:10px 6px;
+  padding:12px 8px;
   display:flex;
   flex-direction:column;
   justify-content:center;
-  gap:6px;
+  gap:4px;
   margin-left:auto;
 }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
 .weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
 .weather .w-aqi .lbl { font-size:14px; opacity:.9; }
+.weather .w-aqi .pm { font-size:12px; opacity:.85; }
 
 /* Background must stay behind content */
 .bg, .bg2 { z-index:-1; }
@@ -1106,6 +1113,8 @@ async function loadWeather() {
     const ttl = document.createElement('div'); ttl.className='ttl'; ttl.textContent = 'AQI';
     const idx = document.createElement('div'); idx.className='idx';
     const lbl = document.createElement('div'); lbl.className='lbl';
+    const pm25 = document.createElement('div'); pm25.className='pm pm25';
+    const pm10 = document.createElement('div'); pm10.className='pm pm10';
 
     if (air && !air.error && !air.need_config) {
       idx.textContent = air.aqi != null ? String(air.aqi) : '?';
@@ -1114,11 +1123,15 @@ async function loadWeather() {
         aqiCard.style.boxShadow = `inset 0 0 0 2px ${air.color}`;
         aqiCard.style.color = '#fff';
       }
+      if (air.pm2_5 != null) pm25.textContent = 'PM2.5 ' + Math.round(air.pm2_5);
+      if (air.pm10  != null) pm10.textContent  = 'PM10 '  + Math.round(air.pm10);
     } else {
       idx.textContent = '–';
       lbl.textContent = 'n/a';
     }
     aqiCard.appendChild(ttl); aqiCard.appendChild(idx); aqiCard.appendChild(lbl);
+    if (pm25.textContent) aqiCard.appendChild(pm25);
+    if (pm10.textContent) aqiCard.appendChild(pm10);
 
     // 조립
     box.appendChild(now);
