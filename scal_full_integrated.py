@@ -1,5 +1,3 @@
-
-
 # ======= EMBEDDED BLOCKS (auto-managed by Telegram commands) ===============
 # ==== EMBEDDED_CONFIG (YAML) START
 EMBEDDED_CONFIG = r"""server:
@@ -63,6 +61,9 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 + Bot duplication guard (file lock) to avoid double polling
 + Bus (Seoul/Gyeonggi): real APIs + stop change via Telegram + board display
 """
+
+# Code below is organized with clearly marked sections.
+# Search for lines like `# === [SECTION: ...] ===` to navigate.
 
 # === [SECTION: Imports / Standard & Third-party] ==============================
 import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET
@@ -302,7 +303,7 @@ def _owm_fetch_onecall(lat, lon, key, units):
     js = r.json()
     def icon_url(code): return f"https://openweathermap.org/img/wn/{code}@2x.png"
     cur = js.get("current", {})
-    dailies = (js.get("daily") or [])[:7]
+    dailies = (js.get("daily") or [])[:5]
     cur_data = {"temp": round(cur.get("temp", 0)), "icon": icon_url(cur.get("weather", [{}])[0].get("icon", "01d"))}
     days = []
     for d in dailies:
@@ -365,6 +366,7 @@ def fetch_weather():
     _weather_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
+# --- Air quality ------------------------------------------------------------
 def fetch_air_quality():
     cfgw = CFG.get("weather", {})
     key = cfgw.get("api_key", "").strip()
@@ -385,10 +387,16 @@ def fetch_air_quality():
     r = requests.get(url, params={"lat": lat, "lon": lon, "appid": key}, timeout=10)
     r.raise_for_status()
     js = r.json()
-    aqi = ((js.get("list") or [{}])[0].get("main") or {}).get("aqi")
+    first = (js.get("list") or [{}])[0]
+    aqi = (first.get("main") or {}).get("aqi")
+    comps = first.get("components") or {}
     labels = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
     colors = {1: "#009966", 2: "#ffde33", 3: "#ff9933", 4: "#cc0033", 5: "#660099"}
     data = {"aqi": aqi, "label": labels.get(aqi, "?"), "color": colors.get(aqi, "#fff")}
+    for k in ("pm2_5", "pm10", "no2", "o3", "so2", "co", "nh3"):
+        v = comps.get(k)
+        if v is not None:
+            data[k] = v
     _air_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
@@ -845,7 +853,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:280px; --weather:280px; --todo:360px; } /* todo -100px */
+          --bus:240px; --weather:280px; --todo:360px; } /* todo -100px */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -899,20 +907,30 @@ BOARD_HTML = r"""
   .bus .meta { opacity:.9; font-size:13px; }
 
   /* Verse block */
-  .verse { flex:0 0 100px; display:flex; align-items:flex-start; gap:12px; }
+  .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
   .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
 
-/* Weather layout (card style 7-day forecast) */
-.weather { display:flex; gap:16px; align-items:center; }
-.weather .w-now { display:flex; align-items:center; gap:12px; min-width:180px; }
+/* Weather layout (card style 5-day forecast) */
+.weather {
+  display:flex;
+  gap:16px;
+  align-items:stretch;
+}
+.weather .w-now {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:180px;
+}
 .weather .w-now .temp { font-size:44px; font-weight:800; line-height:1; }
 
 .weather .w-days {
   display:grid;
-  grid-template-columns:repeat(7,1fr);
+  grid-template-columns:repeat(5,1fr);
   gap:12px;
   width:100%;
   align-items:stretch;
+  flex:1 1 auto;
 }
 .weather .w-day {
   text-align:center;
@@ -928,7 +946,24 @@ BOARD_HTML = r"""
 .weather .w-day .hi { font-weight:800; font-size:16px; }
 .weather .w-day .lo { opacity:.75; font-size:14px; }
 
-  .aqi { align-self:flex-end; font-size:24px; font-weight:700; text-shadow:0 0 6px rgba(0,0,0,.65); }
+/* ▼ AQI card on the right */
+.weather .w-aqi {
+  width:140px;
+  text-align:center;
+  background:rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  padding:12px 8px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+  margin-left:auto;
+}
+.weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
+.weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
+.weather .w-aqi .lbl { font-size:14px; opacity:.9; }
+.weather .w-aqi .pm { font-size:12px; opacity:.85; }
 
 /* Background must stay behind content */
 .bg, .bg2 { z-index:-1; }
@@ -953,7 +988,7 @@ BOARD_HTML = r"""
   </div>
 
   <div class="section">
-    <div class="verse blk"><h3 style="margin-right:8px">Today's Verse</h3><div id="verse" class="text"> </div></div>
+    <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
     <div class="todo blk">
       <h3>Todo</h3>
       <div class="rows">
@@ -967,7 +1002,6 @@ BOARD_HTML = r"""
       <div class="rows" id="bus-rows"></div>
     </div>
     <div class="weather blk" id="weather"></div>
-    <div class="aqi blk" id="aqi"></div>
   </div>
 </div>
 
@@ -1021,97 +1055,95 @@ loadEvents(); setInterval(loadEvents, 5*60*1000);
 
 
 
-// ===== Weather block (final: card-style 7-day forecast) =====
+// ===== Weather block (final: card-style 5-day forecast) =====
 async function loadWeather() {
   const box = document.getElementById('weather');
   try {
-    const r = await fetch('/api/weather');
-    const data = await r.json();
+    // 날씨 + AQI 동시 요청
+    const [wr, ar] = await Promise.all([
+      fetch('/api/weather'),
+      fetch('/api/air')
+    ]);
+
+    const data = await wr.json();
+    const air  = await ar.json().catch(()=>null);
+
     box.innerHTML = '';
 
     if (data && data.need_config) { box.textContent = 'OWM API Key required'; return; }
     if (!data || data.error)     { box.textContent = 'Weather error';       return; }
 
-    // Current (left)
+    // 현재(좌측)
     const now = document.createElement('div');
     now.className = 'w-now';
     const i = document.createElement('img');
-    i.src = data.current.icon; i.alt = '';
-    i.style.width = '70px'; i.style.height = '70px';
+    i.src = data.current.icon; i.alt = ''; i.style.width='70px'; i.style.height='70px';
     const t = document.createElement('div');
     t.className = 'temp';
     t.textContent = data.current.temp + '°';
     now.appendChild(i); now.appendChild(t);
 
-    // 7-day cards (right)
+    // 5일 카드(중앙) — 데이터가 7일 와도 5개만 사용
     const days = document.createElement('div');
     days.className = 'w-days';
     const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const todayIso = new Date().toISOString().slice(0,10);
 
-    for (const d of data.days) {
+    const fiveDays = (Array.isArray(data.days) ? data.days : []).slice(0, 5);
+    for (const d of fiveDays) {
       const dt = new Date(d.date);
-
       const item = document.createElement('div');
       item.className = 'w-day';
       if (d.date === todayIso) item.classList.add('today');
 
-      const nm = document.createElement('div');
-      nm.className = 'nm';
-      nm.textContent = names[dt.getDay()];
+      const nm = document.createElement('div'); nm.className='nm'; nm.textContent = names[dt.getDay()];
+      const im = document.createElement('img'); im.src = d.icon; im.alt = '';
+      const temps = document.createElement('div'); temps.className='temps';
+      const hi = document.createElement('div'); hi.className='hi'; hi.textContent = d.max + '°';
+      const lo = document.createElement('div'); lo.className='lo'; lo.textContent = d.min + '°';
+      temps.appendChild(hi); temps.appendChild(lo);
 
-      const im = document.createElement('img');
-      im.src = d.icon; im.alt = '';
-
-      const temps = document.createElement('div');
-      temps.className = 'temps';
-
-      const hi = document.createElement('div');
-      hi.className = 'hi';
-      hi.textContent = d.max + '°';
-
-      const lo = document.createElement('div');
-      lo.className = 'lo';
-      lo.textContent = d.min + '°';
-
-      temps.appendChild(hi);
-      temps.appendChild(lo);
-
-      item.appendChild(nm);
-      item.appendChild(im);
-      item.appendChild(temps);
-
+      item.appendChild(nm); item.appendChild(im); item.appendChild(temps);
       days.appendChild(item);
     }
 
+    // AQI 카드(우측 끝)
+    const aqiCard = document.createElement('div');
+    aqiCard.className = 'w-aqi';
+    const ttl = document.createElement('div'); ttl.className='ttl'; ttl.textContent = 'AQI';
+    const idx = document.createElement('div'); idx.className='idx';
+    const lbl = document.createElement('div'); lbl.className='lbl';
+    const pm25 = document.createElement('div'); pm25.className='pm pm25';
+    const pm10 = document.createElement('div'); pm10.className='pm pm10';
+
+    if (air && !air.error && !air.need_config) {
+      idx.textContent = air.aqi != null ? String(air.aqi) : '?';
+      lbl.textContent = air.label || '';
+      if (air.color) {
+        aqiCard.style.boxShadow = `inset 0 0 0 2px ${air.color}`;
+        aqiCard.style.color = '#fff';
+      }
+      if (air.pm2_5 != null) pm25.textContent = 'PM2.5 ' + Math.round(air.pm2_5);
+      if (air.pm10  != null) pm10.textContent  = 'PM10 '  + Math.round(air.pm10);
+    } else {
+      idx.textContent = '–';
+      lbl.textContent = 'n/a';
+    }
+    aqiCard.appendChild(ttl); aqiCard.appendChild(idx); aqiCard.appendChild(lbl);
+    if (pm25.textContent) aqiCard.appendChild(pm25);
+    if (pm10.textContent) aqiCard.appendChild(pm10);
+
+    // 조립
     box.appendChild(now);
     box.appendChild(days);
+    box.appendChild(aqiCard);
+
   } catch (e) {
-    const box2 = document.getElementById('weather');
-    if (box2) box2.textContent = 'Failed to load weather';
+    if (box) box.textContent = 'Failed to load weather';
   }
 }
 loadWeather();
 setInterval(loadWeather, 10 * 60 * 1000);
-
-// ===== Air Quality block =====
-async function loadAQI() {
-  const box = document.getElementById('aqi');
-  if (!box) return;
-  try {
-    const r = await fetch('/api/air');
-    const data = await r.json();
-    box.textContent = '';
-    if (data && data.need_config) { box.textContent = 'OWM API Key required'; return; }
-    if (!data || data.error)     { box.textContent = 'AQI error'; return; }
-    box.textContent = 'AQI: ' + data.label;
-    if (data.color) box.style.color = data.color;
-  } catch (e) {
-    box.textContent = 'Failed to load AQI';
-  }
-}
-loadAQI();
-setInterval(loadAQI, 10 * 60 * 1000);
 
 // ===== Verse block =====
 async function loadVerse(){
@@ -2026,24 +2058,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# ======= Embedded-block helpers (override for wrapped form) ==================
-def _read_block(start_tag: str, end_tag: str, file_path: str = __file__) -> str:
-    with open(file_path, "r", encoding="utf-8") as f:
-        src = f.read()
-    s_body, e_body, body = _extract_block(src, start_tag, end_tag)
-    import re as _re
-    m = _re.search(r'r?"""\s*([\s\S]*?)\s*"""', body)
-    return (m.group(1) if m else body)
-
-def _write_block(new_text: str, start_tag: str, end_tag: str, file_path: str = __file__):
-    with open(file_path, "r", encoding="utf-8") as f:
-        src = f.read()
-    s_body, e_body, body = _extract_block(src, start_tag, end_tag)
-    varname = "EMBEDDED_CONFIG" if "CONFIG" in start_tag else "EMBEDDED_VERSES"
-    wrapped = f"{varname} = r\"\"\"{new_text}\"\"\""
-    if not wrapped.endswith("\n"):
-        wrapped += "\n"
-    new_src = src[:s_body] + wrapped + src[e_body:]
-    _atomic_write(file_path, new_src)
-# ============================================================================
