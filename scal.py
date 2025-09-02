@@ -853,7 +853,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:280px; --weather:280px; --todo:360px; } /* todo -100px */
+          --bus:240px; --weather:280px; --todo:360px; } /* todo -100px */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -907,7 +907,7 @@ BOARD_HTML = r"""
   .bus .meta { opacity:.9; font-size:13px; }
 
   /* Verse block */
-  .verse { flex:0 0 100px; display:flex; align-items:flex-start; gap:12px; }
+  .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
   .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
 
 /* Weather layout (card style 5-day forecast) */
@@ -988,7 +988,7 @@ BOARD_HTML = r"""
   </div>
 
   <div class="section">
-    <div class="verse blk"><h3 style="margin-right:8px">Today's Verse</h3><div id="verse" class="text"> </div></div>
+    <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
     <div class="todo blk">
       <h3>Todo</h3>
       <div class="rows">
