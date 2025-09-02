@@ -29,6 +29,7 @@ google:
 
 todoist:
   api_token: "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b"
+  max_items: 20
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
@@ -56,7 +57,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 ( /cal menu is merged into /set -> '6) Manage Events' )
 (UI restores sframe's older 'Monthly Calendar + Photo Fade' layout)
 
-+ Todoist: fetch tasks and render in 2 columns (5 items each)
++ Todoist: fetch tasks and render in 2 columns (10 items each, total 20)
 + Verse: /set -> verse input that shows on board
 + Bot duplication guard (file lock) to avoid double polling
 + Bus (Seoul/Gyeonggi): real APIs + stop change via Telegram + board display
@@ -187,7 +188,7 @@ DEFAULT_CFG = {
         "api_token": "",                   # yaml에 넣은 토큰 사용; 비어있으면 비활성
         "filter": "today | overdue",       # Todoist filter query
         "project_id": "",                  # optional: limit to project
-        "max_items": 10                    # UI는 좌5/우5
+        "max_items": 20                    # UI는 좌10/우10
     },
     # Bus (서울/경기) 설정
     "bus": {
@@ -580,7 +581,7 @@ def todoist_headers():
 def todoist_list_tasks():
     """
     Fetch open tasks via REST v2.
-    Respects filter/project_id; returns trimmed fields up to max_items (default 10).
+    Respects filter/project_id; returns trimmed fields up to max_items (default 20).
     """
     base = "https://api.todoist.com/rest/v2/tasks"
     cfg = CFG.get("todoist", {}) or {}
@@ -594,7 +595,7 @@ def todoist_list_tasks():
     r.raise_for_status()
     items = r.json()
     out = []
-    max_items = int(cfg.get("max_items", 10))
+    max_items = int(cfg.get("max_items", 20))
     for t in items[:max_items]:
         out.append({
             "id": t.get("id"),
@@ -853,7 +854,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:210px; --weather:280px; --todo:200px; } /* todo adjusted */
+          --bus:210px; --weather:280px; --todo:270px; } /* todo height trimmed */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -892,7 +893,7 @@ BOARD_HTML = r"""
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-.todo{ flex:1 1 var(--todo); display:flex; flex-direction:column;}
+.todo{ flex:0 0 var(--todo); display:flex; flex-direction:column;}
   .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
   .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
@@ -1157,7 +1158,7 @@ async function loadVerse(){
 }
 loadVerse(); setInterval(loadVerse, 10*1000);
 
-// ===== Todo block (Todoist, 2 columns, 5 each) =====
+// ===== Todo block (Todoist, 2 columns, 10 each) =====
 function fmtDue(v){
   if(!v) return '';
   const d = new Date(v);
@@ -1188,16 +1189,16 @@ async function loadTodo(){
       return;
     }
 
-    const first5 = data.slice(0,5);
-    const next5  = data.slice(5,10);
+    const first10 = data.slice(0,10);
+    const next10  = data.slice(10,20);
 
-    for (const t of first5){
+    for (const t of first10){
       const row = document.createElement('div'); row.className='item';
       const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
       const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
       row.appendChild(date); row.appendChild(title); c1.appendChild(row);
     }
-    for (const t of next5){
+    for (const t of next10){
       const row = document.createElement('div'); row.className='item';
       const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
       const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
