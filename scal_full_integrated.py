@@ -33,10 +33,10 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: 'gyeonggi'            # seoul | gyeonggi | incheon
+  region: 'seoul'            # seoul | gyeonggi | incheon
   seoul:
     api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-    ars_id: ""        # 서울은 arsId
+    ars_id: "17102"        # 서울은 arsId
   gyeonggi:
     api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
     station_id: "39516"
