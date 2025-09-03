@@ -33,15 +33,15 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: seoul            # seoul | gyeonggi
+  region: ''            # seoul | gyeonggi
   seoul:
-    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
-    ars_id: "39516"        # 서울은 arsId
+    api_key: ""
+    ars_id: ""        # 서울은 arsId
   gyeonggi:
-    api_key: "95b2c4966eeb698ed2db22bf5eb6d753c8e106e6cfbd171fa94306d46287a265"
-    station_id: "200000078"
+    api_key: ""
+    station_id: ""
   max_items: 8
-  routes_whitelist: ["14-1","47","62","532","1302"]     # ["7016","M7106"] 처럼 문자열로!
+  routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
@@ -77,7 +77,7 @@ from flask import Flask, request, jsonify, render_template_string, abort, send_f
 from werkzeug.middleware.proxy_fix import ProxyFix
 import telebot
 # ======= Embedded-block helpers (final) ======================================
-import io, tempfile, os, yaml
+import tempfile, os, yaml
 
 CFG_START = "# ==== EMBEDDED_CONFIG (YAML) START"
 CFG_END   = "# ==== EMBEDDED_CONFIG (YAML) END"
@@ -537,6 +537,7 @@ def fetch_bus():
             return {"need_config": True, "region": "gyeonggi"}
         return fetch_bus_gyeonggi(key, sid, whitelist=wl, max_items=max_items)
 
+
 # === [SECTION: Photo file listing for board background] ======================
 def list_local_images():
     exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -844,6 +845,7 @@ def api_bus():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # === [SECTION: Board HTML (legacy UI; monthly calendar + photo fade)] ========
 BOARD_HTML = r"""
 <!doctype html>
@@ -854,7 +856,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:910px;
-          --bus:210px; --weather:280px; --todo:270px; } /* todo height trimmed */
+          --bus:290px; --weather:280px; --todo:270px; } /* todo height trimmed */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -900,12 +902,11 @@ BOARD_HTML = r"""
   .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
-  .bus{flex:0 0 var(--bus);}
-  .bus .rows { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; }
-  .bus .item { display:flex; justify-content:space-between; gap:10px; font-size:14px; background:rgba(0,0,0,.35); border-radius:8px; padding:6px 8px; }
-  .bus .route { font-weight:700; min-width:48px; }
-  .bus .msgs { display:flex; gap:12px; opacity:.95; }
-  .bus .meta { opacity:.9; font-size:13px; }
+  .bus{flex:0 0 var(--bus); display:flex; flex-direction:column;}
+  .bus .rows{display:flex; flex-direction:column; gap:6px;}
+  .bus .item{display:flex; justify-content:space-between; font-size:14px;}
+  .bus .item .rt{font-weight:700;}
+  .bus .item .msg{opacity:.9;}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
@@ -999,8 +1000,7 @@ BOARD_HTML = r"""
     </div>
     <div class="bus blk">
       <h3>Bus</h3>
-      <div class="meta" id="bus-meta"></div>
-      <div class="rows" id="bus-rows"></div>
+      <div class="rows" id="businfo"></div>
     </div>
     <div class="weather blk" id="weather"></div>
   </div>
@@ -1210,46 +1210,28 @@ async function loadTodo(){
 }
 loadTodo(); setInterval(loadTodo, 20*1000);
 
-// ===== Bus block =====
-async function loadBus(){
-  const meta = document.getElementById('bus-meta');
-  const rows = document.getElementById('bus-rows');
-  meta.textContent = ''; rows.innerHTML = '';
+async function refreshBus(){
   try{
     const r = await fetch('/api/bus');
+    if(!r.ok) return;
     const data = await r.json();
-    if (data.need_config){
-      meta.textContent = 'Bus config required';
+    const box = document.getElementById('businfo');
+    if(!box) return;
+    box.innerHTML='';
+    if(data.need_config){
+      box.textContent = '버스 설정 필요';
       return;
     }
-    if (data.error){
-      meta.textContent = 'Bus error';
-      return;
-    }
-    const region = data.region==='seoul'?'Seoul':'Gyeonggi';
-    meta.textContent = `${region} · ${data.stop_name||''}`;
-
-    const arr = data.items || [];
-    if (!arr.length){
-      const d = document.createElement('div'); d.textContent='No bus data.';
-      rows.appendChild(d);
-      return;
-    }
-    for(const it of arr){
-      const row = document.createElement('div'); row.className='item';
-      const left = document.createElement('div'); left.className='route'; left.textContent = it.route || '-';
-      const right = document.createElement('div'); right.className='msgs';
-      const m1 = document.createElement('div'); m1.textContent = it.msg1 || '';
-      const m2 = document.createElement('div'); m2.textContent = it.msg2 || '';
-      right.appendChild(m1); if (it.msg2) right.appendChild(m2);
-      row.appendChild(left); row.appendChild(right);
-      rows.appendChild(row);
-    }
-  }catch(e){
-    meta.textContent = 'Bus load failed';
-  }
+    (data.items||[]).forEach(it=>{
+      const row=document.createElement('div');
+      row.className='item';
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="msg">${it.msg1}</div>`;
+      box.appendChild(row);
+    });
+  }catch(e){}
 }
-loadBus(); setInterval(loadBus, 15*1000);
+refreshBus();
+setInterval(refreshBus,30000);
 
 // ===== Background photo crossfade (delay-optimized & path-safe) =====
 // - /api/photos 목록 셔플
@@ -1559,7 +1541,7 @@ if TB:
         kb = kb_inline([
             [telebot.types.InlineKeyboardButton("1) calendar", callback_data="cfg_ical")],
             [telebot.types.InlineKeyboardButton("2) google oauth status", callback_data="cfg_ghow")],
-            [telebot.types.InlineKeyboardButton("3) businfo (view/change)", callback_data="cfg_bus")],
+            [telebot.types.InlineKeyboardButton("3) bus (view/change)", callback_data="cfg_bus")],
             [telebot.types.InlineKeyboardButton("4) photo (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("5) weather (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("6) manage events", callback_data="cal_manage")],
