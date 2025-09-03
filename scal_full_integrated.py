@@ -919,8 +919,8 @@ BOARD_HTML = r"""
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <title>Smart Frame</title>
 <style>
-  :root { --W:1080px; --H:1848px; --top:90px; --cal:910px;
-          --bus:218px; --weather:280px; --todo:270px; } /* bus box reduced 25% */
+  :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
+          --bus:198px; --weather:280px; --todo:270px; } /* bus box reduced 25% */
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
