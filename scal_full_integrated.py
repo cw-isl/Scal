@@ -1063,7 +1063,7 @@ BOARD_HTML = r"""
       </div>
     </div>
     <div class="bus blk">
-      <h3>Bus</h3>
+      <h3 id="bus-title">Bus</h3>
       <div class="rows" id="businfo"></div>
     </div>
     <div class="weather blk" id="weather"></div>
@@ -1281,6 +1281,10 @@ async function refreshBus(){
     const data = await r.json();
     const box = document.getElementById('businfo');
     if(!box) return;
+
+    const title = document.getElementById('bus-title');
+    if(title) title.textContent = data.stop_name ? `Bus - ${data.stop_name}` : 'Bus';
+
     box.innerHTML='';
     if(data.need_config){
       box.textContent = '버스 설정 필요';
