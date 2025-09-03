@@ -33,13 +33,16 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: ''            # seoul | gyeonggi
+  region: ''            # seoul | gyeonggi | incheon
   seoul:
     api_key: ""
     ars_id: ""        # 서울은 arsId
   gyeonggi:
     api_key: ""
     station_id: ""
+  incheon:
+    api_key: ""
+    stop_id: ""       # 인천은 bstopId
   max_items: 8
   routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
 """
@@ -60,7 +63,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 + Todoist: fetch tasks and render in 2 columns (10 items each, total 20)
 + Verse: /set -> verse input that shows on board
 + Bot duplication guard (file lock) to avoid double polling
-+ Bus (Seoul/Gyeonggi): real APIs + stop change via Telegram + board display
++ Bus (Seoul/Gyeonggi/Incheon): real APIs + stop change via Telegram + board display
 """
 
 # Code below is organized with clearly marked sections.
@@ -190,11 +193,12 @@ DEFAULT_CFG = {
         "project_id": "",                  # optional: limit to project
         "max_items": 20                    # UI는 좌10/우10
     },
-    # Bus (서울/경기) 설정
+    # Bus (서울/경기/인천) 설정
     "bus": {
-        "region": "seoul",                 # seoul | gyeonggi
+        "region": "seoul",                 # seoul | gyeonggi | incheon
         "seoul":   {"api_key": "", "ars_id": ""},        # ars_id 예: "02139"
         "gyeonggi":{"api_key": "", "station_id": ""},    # station_id 예: "200000078"
+        "incheon": {"api_key": "", "stop_id": ""},       # stop_id 예: "160000484"
         "max_items": 8,
         "routes_whitelist": []             # 예: ["7016","M7106"] 비워두면 전체
     }
@@ -401,7 +405,7 @@ def fetch_air_quality():
     _air_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
-# === [SECTION: Bus (Seoul/Gyeonggi) API adapters] ============================
+# === [SECTION: Bus (Seoul/Gyeonggi/Incheon) API adapters] ====================
 def _as_int(x, default=None):
     try:
         return int(x)
@@ -519,6 +523,58 @@ def fetch_bus_gyeonggi(api_key: str, station_id: str, whitelist=None, max_items=
     items.sort(key=lambda x: (9999 if x["min1"] is None else x["min1"], x["route"]))
     return {"region": "gyeonggi", "stop_name": stop_name or f"stationId {station_id}", "items": items[:max_items]}
 
+def fetch_bus_incheon(api_key: str, stop_id: str, whitelist=None, max_items=8):
+    """
+    인천광역시 정류소(bstopId) 도착정보
+    API: http://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList?serviceKey=...&bstopId=...&_type=json
+    Fallback: XML 파싱
+    """
+    base = "http://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList"
+    params = {"serviceKey": api_key, "bstopId": stop_id, "pageNo": 1, "numOfRows": 999, "_type": "json"}
+    stop_name = ""
+    items = []
+    try:
+        r = requests.get(base, params=params, timeout=10); r.raise_for_status()
+        js = r.json()
+        body = (js.get("response") or {}).get("body") or {}
+        arr = body.get("items") or body.get("itemList") or body.get("item") or []
+        if isinstance(arr, dict):
+            arr = arr.get("item") or [arr]
+        for it in arr:
+            rt = it.get("routeNo") or it.get("routeName") or it.get("lineNo") or ""
+            if whitelist and rt not in whitelist:
+                continue
+            p1 = _as_int(it.get("predictTime1") or it.get("min1"))
+            p2 = _as_int(it.get("predictTime2") or it.get("min2"))
+            dest = it.get("destination") or it.get("dir") or it.get("routeDestination") or ""
+            stop_name = it.get("bstopNm") or stop_name
+            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
+            msg2 = "" if p2 is None else ("곧 도착" if p2 == 0 else f"{p2}분")
+            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
+    except ValueError:
+        rx = requests.get(
+            base,
+            params={"serviceKey": api_key, "bstopId": stop_id, "pageNo": 1, "numOfRows": 999},
+            timeout=10,
+        )
+        rx.raise_for_status()
+        root = ET.fromstring(rx.text)
+        for it in root.iterfind(".//item"):
+            rt = it.findtext("routeNo") or it.findtext("routeName") or it.findtext("lineNo") or ""
+            if whitelist and rt not in whitelist:
+                continue
+            p1 = _as_int(it.findtext("predictTime1") or it.findtext("min1"))
+            p2 = _as_int(it.findtext("predictTime2") or it.findtext("min2"))
+            dest = it.findtext("destination") or it.findtext("dir") or it.findtext("routeDestination") or ""
+            stnm = it.findtext("bstopNm") or ""
+            if stnm:
+                stop_name = stnm
+            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
+            msg2 = "" if p2 is None else ("곧 도착" if p2 == 0 else f"{p2}분")
+            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
+    items.sort(key=lambda x: (9999 if x["min1"] is None else x["min1"], x["route"]))
+    return {"region": "incheon", "stop_name": stop_name or f"bstopId {stop_id}", "items": items[:max_items]}
+
 def fetch_bus():
     cfg = CFG.get("bus", {}) or {}
     region = (cfg.get("region") or "seoul").lower()
@@ -530,12 +586,20 @@ def fetch_bus():
         if not key or not ars:
             return {"need_config": True, "region": "seoul"}
         return fetch_bus_seoul(key, ars, whitelist=wl, max_items=max_items)
-    else:
+    elif region == "gyeonggi":
         key = (cfg.get("gyeonggi") or {}).get("api_key", "").strip()
         sid = (cfg.get("gyeonggi") or {}).get("station_id", "").strip()
         if not key or not sid:
             return {"need_config": True, "region": "gyeonggi"}
         return fetch_bus_gyeonggi(key, sid, whitelist=wl, max_items=max_items)
+    elif region == "incheon":
+        key = (cfg.get("incheon") or {}).get("api_key", "").strip()
+        sid = (cfg.get("incheon") or {}).get("stop_id", "").strip()
+        if not key or not sid:
+            return {"need_config": True, "region": "incheon"}
+        return fetch_bus_incheon(key, sid, whitelist=wl, max_items=max_items)
+    else:
+        return {"need_config": True, "region": region}
 
 
 # === [SECTION: Photo file listing for board background] ======================
