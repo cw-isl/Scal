@@ -31,20 +31,20 @@ todoist:
   api_token: "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b"
   max_items: 20
 
-# ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
-bus:
-  region: ''            # seoul | gyeonggi | incheon
-  seoul:
-    api_key: ""
-    ars_id: ""        # 서울은 arsId
-  gyeonggi:
-    api_key: ""
-    station_id: ""
-  incheon:
-    api_key: ""
-    stop_id: ""       # 인천은 bstopId
-  max_items: 8
-  routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
+  # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
+  bus:
+    region: 'gyeonggi'            # seoul | gyeonggi | incheon
+    seoul:
+      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+      ars_id: ""        # 서울은 arsId
+    gyeonggi:
+      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+      station_id: "39516"
+    incheon:
+      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+      stop_id: ""       # 인천은 bstopId
+    max_items: 8
+    routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
@@ -421,10 +421,10 @@ def _extract_min_from_msg(msg: str):
 def fetch_bus_seoul(api_key: str, ars_id: str, whitelist=None, max_items=8):
     """
     서울시 버스 정류소(arsId) 도착정보
-    API: http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid?serviceKey=...&arsId=...&_type=json
+    API: https://ws.bus.go.kr/api/rest/stationinfo/getStationByUid?serviceKey=...&arsId=...&_type=json
     Fallback: XML 파싱
     """
-    base = "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
+    base = "https://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
     params = {"serviceKey": api_key, "arsId": ars_id, "_type": "json"}
     stop_name = ""
     items = []
@@ -526,10 +526,10 @@ def fetch_bus_gyeonggi(api_key: str, station_id: str, whitelist=None, max_items=
 def fetch_bus_incheon(api_key: str, stop_id: str, whitelist=None, max_items=8):
     """
     인천광역시 정류소(bstopId) 도착정보
-    API: http://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList?serviceKey=...&bstopId=...&_type=json
+    API: https://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList?serviceKey=...&bstopId=...&_type=json
     Fallback: XML 파싱
     """
-    base = "http://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList"
+    base = "https://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList"
     params = {"serviceKey": api_key, "bstopId": stop_id, "pageNo": 1, "numOfRows": 999, "_type": "json"}
     stop_name = ""
     items = []
