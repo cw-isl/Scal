@@ -31,20 +31,20 @@ todoist:
   api_token: "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b"
   max_items: 20
 
-  # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
-  bus:
-    region: 'gyeonggi'            # seoul | gyeonggi | incheon
-    seoul:
-      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-      ars_id: ""        # 서울은 arsId
-    gyeonggi:
-      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-      station_id: "39516"
-    incheon:
-      api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-      stop_id: ""       # 인천은 bstopId
-    max_items: 8
-    routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
+# ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
+bus:
+  region: 'gyeonggi'            # seoul | gyeonggi | incheon
+  seoul:
+    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+    ars_id: ""        # 서울은 arsId
+  gyeonggi:
+    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+    station_id: "39516"
+  incheon:
+    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+    stop_id: ""       # 인천은 bstopId
+  max_items: 8
+  routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
