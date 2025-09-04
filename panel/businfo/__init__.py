@@ -1,1 +1,0 @@
-from .xylopanel import Panel, colors
