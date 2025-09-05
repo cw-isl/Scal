@@ -434,11 +434,15 @@ def _normalize_arrmsg(msg: str, fallback_minutes: Optional[int]) -> Tuple[str, s
     if not msg and fallback_minutes is None:
         return ("", "")
     if fallback_minutes is not None:
-        return ("곧 도착", "") if fallback_minutes <= 0 else (f"{fallback_minutes}분", "")
+        if fallback_minutes <= 0:
+            return ("곧 도착", "0정거장")
+        return (f"{fallback_minutes}분", "")
     m_min = re.search(r"(\d+)\s*분", msg or "")
     m_hops = re.search(r"(\d+)\s*번째\s*전", msg or "")
     t = f"{m_min.group(1)}분" if m_min else ("곧 도착" if "곧 도착" in (msg or "") else (msg or ""))
     hops = f"{m_hops.group(1)}정거장" if m_hops else ""
+    if t == "곧 도착" and not hops:
+        hops = "0정거장"
     return (t, hops)
 
 
@@ -450,7 +454,7 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
     r = requests.get(url, timeout=7)
     r.raise_for_status()
     root = ET.fromstring(r.text)
-    lines: List[str] = []
+    records: List[Tuple[int, str]] = []
     stop_name = ""
     for it in root.iter("itemList"):
         if not stop_name:
@@ -467,13 +471,13 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
             parts.append(hops)
         if t1:
             parts.append(t1)
-        lines.append("\t".join(parts))
-    lines = [ln for ln in lines if ln.strip()]
-    if lines:
-        def keyf(s: str):
-            first = s.split("\t", 1)[0]
-            return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
-        lines.sort(key=keyf)
+        line = "\t".join(parts)
+        m = re.search(r"(\d+)", t1)
+        minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
+        records.append((minutes, line))
+    records = [r for r in records if r[1].strip()]
+    records.sort(key=lambda x: x[0])
+    lines = [r[1] for r in records]
     return stop_name, lines
 
 
@@ -485,7 +489,7 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
     r = requests.get(url, timeout=7)
     r.raise_for_status()
     root = ET.fromstring(r.text)
-    lines: List[str] = []
+    records: List[Tuple[int, str]] = []
     stop_name = ""
     for it in root.iter("itemList"):
         if not stop_name:
@@ -502,13 +506,13 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
             parts.append(hops)
         if t1:
             parts.append(t1)
-        lines.append("\t".join(parts))
-    lines = [ln for ln in lines if ln.strip()]
-    if lines:
-        def keyf(s: str):
-            first = s.split("\t", 1)[0]
-            return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
-        lines.sort(key=keyf)
+        line = "\t".join(parts)
+        m = re.search(r"(\d+)", t1)
+        minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
+        records.append((minutes, line))
+    records = [r for r in records if r[1].strip()]
+    records.sort(key=lambda x: x[0])
+    lines = [r[1] for r in records]
     return stop_name, lines
 
 
