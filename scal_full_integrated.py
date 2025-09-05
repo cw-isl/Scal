@@ -1548,7 +1548,7 @@ if TB:
             [telebot.types.InlineKeyboardButton("1) iCal URL View/Change", callback_data="cfg_ical")],
             [telebot.types.InlineKeyboardButton("2) Todo (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("3) Photos (later)", callback_data="noop")],
-            [telebot.types.InlineKeyboardButton("4) Bus (view/change)", callback_data="cfg_bus")],
+            [telebot.types.InlineKeyboardButton("4) 버스정보", callback_data="cfg_bus")],
         ])
         TB.send_message(m.chat.id, "Smart Frame Settings", reply_markup=kb)
 
@@ -1559,7 +1559,7 @@ if TB:
         kb = kb_inline([
             [telebot.types.InlineKeyboardButton("1) calendar", callback_data="cfg_ical")],
             [telebot.types.InlineKeyboardButton("2) google oauth status", callback_data="cfg_ghow")],
-            [telebot.types.InlineKeyboardButton("3) bus (view/change)", callback_data="cfg_bus")],
+            [telebot.types.InlineKeyboardButton("3) 버스정보", callback_data="cfg_bus")],
             [telebot.types.InlineKeyboardButton("4) photo (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("5) weather (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("6) manage events", callback_data="cal_manage")],
@@ -1603,35 +1603,21 @@ if TB:
             TB.send_message(c.message.chat.id, "input text")
         elif c.data == "cfg_bus":
             TB.answer_callback_query(c.id)
-            bus = CFG.get("bus", {})
-            rgn = bus.get("region", "서울")
-            api = bus.get("api", "seoul")
-            sid = bus.get("stop_id", "")
-            keys = bus.get("keys", {}) or {}
-            key_status = "등록됨" if keys.get(api) else "미등록"
-            msg = [
-                "* Bus config *",
-                f"- region : {rgn}",
-                f"- api : {api}",
-                f"- stop_id : {sid}",
-                f"- key({api}) : {key_status}",
-                "",
-                "Choose an action:",
-            ]
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
-                telebot.types.InlineKeyboardButton("Change region", callback_data="bus_set_region"),
-                telebot.types.InlineKeyboardButton("Change api", callback_data="bus_set_api"),
-                telebot.types.InlineKeyboardButton("Change stop id", callback_data="bus_set_stop"),
-                telebot.types.InlineKeyboardButton("Set API key", callback_data="bus_set_key"),
-                telebot.types.InlineKeyboardButton("Test fetch", callback_data="bus_test"),
+                telebot.types.InlineKeyboardButton("지역변경", callback_data="bus_set_region"),
+                telebot.types.InlineKeyboardButton("API변경", callback_data="bus_set_api"),
+                telebot.types.InlineKeyboardButton("정류소ID 변경", callback_data="bus_set_stop"),
+                telebot.types.InlineKeyboardButton("서비스키 변경", callback_data="bus_set_key"),
+                telebot.types.InlineKeyboardButton("현재설정 조회", callback_data="bus_show_config"),
+                telebot.types.InlineKeyboardButton("지정정류소 현황조회", callback_data="bus_test"),
             )
-            TB.send_message(c.message.chat.id, "\n".join(msg), reply_markup=kb, parse_mode="Markdown")
+            TB.send_message(c.message.chat.id, "버스 정보 메뉴를 선택하세요:", reply_markup=kb)
         elif c.data == "noop":
             TB.answer_callback_query(c.id, "Coming soon")
 
     # ---- Bus settings flow
-    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_region","bus_set_api","bus_set_stop","bus_set_key","bus_test"))
+    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_region","bus_set_api","bus_set_stop","bus_set_key","bus_show_config","bus_test"))
     def on_cb_bus(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "Not authorized."); return
@@ -1639,29 +1625,44 @@ if TB:
         uid = c.from_user.id
         if c.data == "bus_set_region":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_region"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Type region: 서울|경기|인천. (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "지역을 입력하세요 (서울/경기/인천).")
         elif c.data == "bus_set_api":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_api"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Type api: seoul or tago. (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "API를 입력하세요 (seoul 또는 tago).")
         elif c.data == "bus_set_stop":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_stop"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Enter stop id (ARS). (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "정류소 ID(ARS)를 입력하세요.")
         elif c.data == "bus_set_key":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_key"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Enter API key for current api. (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "현재 API에 사용할 서비스키를 입력하세요.")
+        elif c.data == "bus_show_config":
+            bus = CFG.get("bus", {})
+            rgn = bus.get("region", "설정안됨")
+            api = bus.get("api", "설정안됨")
+            sid = bus.get("stop_id", "설정안됨")
+            keys = bus.get("keys", {}) or {}
+            key_status = "등록" if keys.get(api) else "미등록"
+            msg = [
+                f"지역: {rgn}",
+                f"API: {api}",
+                f"정류소ID: {sid}",
+                f"서비스키({api}): {key_status}",
+            ]
+            TB.send_message(c.message.chat.id, "\n".join(msg))
         elif c.data == "bus_test":
             try:
                 data = fetch_bus()
                 if data.get("need_config"):
-                    TB.send_message(c.message.chat.id, "Bus config incomplete.")
+                    TB.send_message(c.message.chat.id, "버스 설정이 부족합니다.")
                     return
                 lines = [f"[{data['region']}] {data.get('stop_name','')}"]
                 for it in data.get("items", [])[:10]:
                     lines.append(f"{it['route']}: {it.get('msg1','')} {('/ '+it['msg2']) if it.get('msg2') else ''}")
-                if len(lines)==1: lines.append("(no items)")
+                if len(lines)==1:
+                    lines.append("(정보 없음)")
                 TB.send_message(c.message.chat.id, "\n".join(lines))
             except Exception as e:
-                TB.send_message(c.message.chat.id, f"Fetch failed: {e}")
+                TB.send_message(c.message.chat.id, f"검색 실패: {e}")
 
     # ---- Add flow
     @TB.callback_query_handler(func=lambda c: c.data.startswith(("cal_add","add_year","add_month","add_day","end_same_","add_eyear","add_emonth","add_eday")))
@@ -1835,7 +1836,7 @@ if TB:
             val = (m.text or "").strip()
             CFG["bus"]["region"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, f"Bus region set to {val}.")
+            TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
@@ -1843,10 +1844,10 @@ if TB:
         if st.get("mode") == "await_bus_api":
             val = (m.text or "").strip().lower()
             if val not in ("seoul","tago"):
-                TB.reply_to(m, "Invalid. Type seoul or tago."); return
+                TB.reply_to(m, "잘못된 값입니다. seoul 또는 tago를 입력하세요."); return
             CFG["bus"]["api"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, f"Bus api set to {val}.")
+            TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
@@ -1855,7 +1856,7 @@ if TB:
             val = (m.text or "").strip()
             CFG["bus"]["stop_id"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, "Bus stop updated.")
+            TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
@@ -1865,7 +1866,7 @@ if TB:
             api = CFG.get("bus", {}).get("api", "seoul")
             CFG["bus"].setdefault("keys", {})[api] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, f"{api} API key updated.")
+            TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
