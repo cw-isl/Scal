@@ -117,7 +117,7 @@ def _normalize_arrmsg(msg: str, fallback_minutes: Optional[int]) -> Tuple[str, s
 
 
 # ===== 서울 API 호출 =====
-def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
+def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
     """TOPIS: 정류장 ARS번호 기반 getStationByUid"""
     url = (
         "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
@@ -128,7 +128,10 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
     root = ET.fromstring(r.text)
 
     lines: List[str] = []
+    stop_name = ""
     for it in root.iter("itemList"):
+        if not stop_name:
+            stop_name = _pick_text(it, "stNm")
         rtNm = _pick_text(it, "rtNm")
         arrmsg1 = _pick_text(it, "arrmsg1")
         traTime1 = _pick_text(it, "traTime1")
@@ -144,10 +147,10 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
             first = s.split("\t", 1)[0]
             return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
         lines.sort(key=keyf)
-    return lines
+    return stop_name, lines
 
 
-def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
+def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List[str]]:
     """보조: getLowArrInfoByStIdList (계정/오퍼레이션에 따라 응답 형식 다름)"""
     url = (
         "http://ws.bus.go.kr/api/rest/arrive/getLowArrInfoByStIdList"
@@ -158,7 +161,10 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
     root = ET.fromstring(r.text)
 
     lines: List[str] = []
+    stop_name = ""
     for it in root.iter("itemList"):
+        if not stop_name:
+            stop_name = _pick_text(it, "stNm")
         rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
         arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
         traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
@@ -174,18 +180,18 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
             first = s.split("\t", 1)[0]
             return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
         lines.sort(key=keyf)
-    return lines
+    return stop_name, lines
 
 
-def seoul_get_by_ars(ars_id: str, service_key: str) -> List[str]:
+def seoul_get_by_ars(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
     """서울 도착정보: 우선 getStationByUid → 없으면 보조 API 시도"""
     if not service_key:
-        return ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"]
+        return ("", ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"])
 
     try:
-        primary = _seoul_station_by_uid(ars_id, service_key)
+        name, primary = _seoul_station_by_uid(ars_id, service_key)
         if primary:
-            return primary
+            return name, primary
     except requests.RequestException as e:
         log.warning(f"getStationByUid error: {e}")
     except ET.ParseError as e:
@@ -193,15 +199,15 @@ def seoul_get_by_ars(ars_id: str, service_key: str) -> List[str]:
 
     # 보조 시도
     try:
-        backup = _seoul_low_by_stid(ars_id, service_key)
+        name, backup = _seoul_low_by_stid(ars_id, service_key)
         if backup:
-            return backup
+            return name, backup
     except requests.RequestException as e:
         log.warning(f"getLowArrInfoByStIdList error: {e}")
     except ET.ParseError as e:
         log.warning(f"XML parse error (backup): {e}")
 
-    return ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"]
+    return ("", ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"])
 
 
 # ===== TAGO (안내) =====
@@ -237,7 +243,10 @@ async def cmd_bus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key = st["keys"].get(api, "")
 
     await update.message.reply_text(f"⏳ 조회 중… (region={region}, api={api}, id={stop_id})")
-    lines = seoul_get_by_ars(stop_id, key) if api == "seoul" else tago_stub(stop_id, key, region)
+    if api == "seoul":
+        stop_name, lines = seoul_get_by_ars(stop_id, key)
+    else:
+        stop_name, lines = "", tago_stub(stop_id, key, region)
     await update.message.reply_text("\n".join(lines))
 
 

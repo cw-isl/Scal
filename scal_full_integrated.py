@@ -415,8 +415,11 @@ def _as_int(x, default=None):
         return default
 
 def _extract_min_from_msg(msg: str):
-    """한국어 도착메시지에서 '분' 앞의 숫자 추출."""
-    if not msg: return None
+    """한국어 도착메시지에서 '분' 또는 '곧 도착' 판단."""
+    if not msg:
+        return None
+    if "곧" in msg:
+        return 0
     m = re.search(r"(\d+)\s*분", msg)
     return _as_int(m.group(1)) if m else None
 def _pick_text(elem: Optional[ET.Element], tag: str) -> str:
@@ -439,7 +442,7 @@ def _normalize_arrmsg(msg: str, fallback_minutes: Optional[int]) -> Tuple[str, s
     return (t, hops)
 
 
-def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
+def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
     url = (
         "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
         f"?serviceKey={quote(service_key)}&arsId={quote(str(ars_id))}"
@@ -448,7 +451,10 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
     r.raise_for_status()
     root = ET.fromstring(r.text)
     lines: List[str] = []
+    stop_name = ""
     for it in root.iter("itemList"):
+        if not stop_name:
+            stop_name = _pick_text(it, "stNm")
         rtNm = _pick_text(it, "rtNm")
         arrmsg1 = _pick_text(it, "arrmsg1")
         traTime1 = _pick_text(it, "traTime1")
@@ -463,10 +469,10 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
             first = s.split("\t", 1)[0]
             return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
         lines.sort(key=keyf)
-    return lines
+    return stop_name, lines
 
 
-def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
+def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List[str]]:
     url = (
         "http://ws.bus.go.kr/api/rest/arrive/getLowArrInfoByStIdList"
         f"?serviceKey={quote(service_key)}&stId={quote(str(ars_id_as_stid))}"
@@ -475,7 +481,10 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
     r.raise_for_status()
     root = ET.fromstring(r.text)
     lines: List[str] = []
+    stop_name = ""
     for it in root.iter("itemList"):
+        if not stop_name:
+            stop_name = _pick_text(it, "stNm")
         rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
         arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
         traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
@@ -490,29 +499,29 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
             first = s.split("\t", 1)[0]
             return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
         lines.sort(key=keyf)
-    return lines
+    return stop_name, lines
 
 
-def seoul_get_by_ars(ars_id: str, service_key: str) -> List[str]:
+def seoul_get_by_ars(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
     if not service_key:
-        return ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"]
+        return ("", ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"])
     try:
-        primary = _seoul_station_by_uid(ars_id, service_key)
+        name, primary = _seoul_station_by_uid(ars_id, service_key)
         if primary:
-            return primary
+            return name, primary
     except requests.RequestException as e:
         log.warning(f"getStationByUid error: {e}")
     except ET.ParseError as e:
         log.warning(f"XML parse error (primary): {e}")
     try:
-        backup = _seoul_low_by_stid(ars_id, service_key)
+        name, backup = _seoul_low_by_stid(ars_id, service_key)
         if backup:
-            return backup
+            return name, backup
     except requests.RequestException as e:
         log.warning(f"getLowArrInfoByStIdList error: {e}")
     except ET.ParseError as e:
         log.warning(f"XML parse error (backup): {e}")
-    return ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"]
+    return ("", ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"])
 
 
 def tago_stub(stop_id: str, key: str, region: str) -> List[str]:
@@ -532,7 +541,7 @@ def fetch_bus():
         key = keys.get("seoul", "").strip()
         if not key or not stop_id:
             return {"need_config": True, "region": region}
-        lines = seoul_get_by_ars(stop_id, key)
+        stop_name, lines = seoul_get_by_ars(stop_id, key)
         items = []
         for ln in lines:
             parts = ln.split("\t")
@@ -545,11 +554,13 @@ def fetch_bus():
                 "msg2": msg2,
                 "min1": _extract_min_from_msg(msg1),
             })
-        return {"region": region, "stop_name": stop_id, "items": items[:8]}
+        items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
+        items = items[:8]
+        return {"region": region, "stop_name": stop_name, "stop_id": stop_id, "items": items}
     else:
         lines = tago_stub(stop_id, keys.get("tago", ""), region)
         items = [{"route": ln, "msg1": "", "msg2": "", "min1": None} for ln in lines]
-        return {"region": region, "stop_name": stop_id, "items": items}
+        return {"region": region, "stop_name": stop_id, "stop_id": stop_id, "items": items}
 
 
 # === [SECTION: Photo file listing for board background] ======================
@@ -917,10 +928,13 @@ BOARD_HTML = r"""
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
   .bus{flex:0 0 var(--bus); display:flex; flex-direction:column;}
-  .bus .rows{display:flex; flex-direction:column; gap:6px;}
-  .bus .item{display:flex; justify-content:space-between; font-size:14px;}
-  .bus .item .rt{font-weight:700;}
-  .bus .item .msg{opacity:.9;}
+  .bus .stop{font-size:14px; margin-bottom:4px;}
+  .bus .rows{display:flex; gap:10px; overflow:hidden;}
+  .bus .col{flex:1 1 50%; display:flex; flex-direction:column; gap:6px;}
+  .bus .item{display:flex; font-size:14px;}
+  .bus .item .rt{font-weight:700; width:8ch;}
+  .bus .item .hops{width:6ch; text-align:right; margin-right:4px;}
+  .bus .item .msg{flex:1; text-align:right; opacity:.9;}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
@@ -1013,8 +1027,12 @@ BOARD_HTML = r"""
       </div>
     </div>
     <div class="bus blk">
-      <h3 id="bus-title">Bus</h3>
-      <div class="rows" id="businfo"></div>
+      <h3 id="bus-title">BUS Info</h3>
+      <div class="stop" id="bus-stop"></div>
+      <div class="rows" id="businfo">
+        <div class="col" id="bus-left"></div>
+        <div class="col" id="bus-right"></div>
+      </div>
     </div>
     <div class="weather blk" id="weather"></div>
   </div>
@@ -1229,27 +1247,37 @@ async function refreshBus(){
     const r = await fetch('/api/bus');
     if(!r.ok) return;
     const data = await r.json();
-    const box = document.getElementById('businfo');
-    if(!box) return;
+    const stopEl = document.getElementById('bus-stop');
+    if(stopEl) stopEl.textContent = data.stop_name ? `${data.stop_name} (${data.stop_id || ''})` : '';
 
-    const title = document.getElementById('bus-title');
-    if(title) title.textContent = data.stop_name ? `Bus - ${data.stop_name}` : 'Bus';
+    const left = document.getElementById('bus-left');
+    const right = document.getElementById('bus-right');
+    if(!left || !right) return;
 
-    box.innerHTML='';
+    left.innerHTML='';
+    right.innerHTML='';
     if(data.need_config){
-      box.textContent = '버스 설정 필요';
+      left.textContent = '버스 설정 필요';
       return;
     }
-    (data.items||[]).forEach(it=>{
+    const items = data.items || [];
+    const mid = Math.ceil(items.length/2);
+    items.slice(0, mid).forEach(it=>{
       const row=document.createElement('div');
       row.className='item';
-      row.innerHTML=`<div class="rt">${it.route}</div><div class="msg">${it.msg1}</div>`;
-      box.appendChild(row);
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.msg2}</div><div class="msg">${it.msg1}</div>`;
+      left.appendChild(row);
+    });
+    items.slice(mid).forEach(it=>{
+      const row=document.createElement('div');
+      row.className='item';
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.msg2}</div><div class="msg">${it.msg1}</div>`;
+      right.appendChild(row);
     });
   }catch(e){}
 }
 refreshBus();
-setInterval(refreshBus,30000);
+setInterval(refreshBus,60000);
 
 // ===== Background photo crossfade (delay-optimized & path-safe) =====
 // - /api/photos 목록 셔플
