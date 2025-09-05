@@ -563,7 +563,7 @@ def fetch_bus():
                 "min1": _extract_min_from_msg(tmsg),
             })
         items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
-        items = items[:8]
+        items = items[:14]
         return {"region": region, "stop_name": stop_name, "stop_id": stop_id, "items": items}
     else:
         lines = tago_stub(stop_id, keys.get("tago", ""), region)
