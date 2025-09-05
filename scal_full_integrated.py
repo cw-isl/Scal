@@ -33,18 +33,12 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: 'seoul'            # seoul | gyeonggi | incheon
-  seoul:
-    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-    ars_id: "17102"        # 서울은 arsId
-  gyeonggi:
-    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-    station_id: "39516"
-  incheon:
-    api_key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-    stop_id: ""       # 인천은 bstopId
-  max_items: 8
-  routes_whitelist: []     # ["7016","M7106"] 처럼 문자열로!
+  region: "서울"
+  api: "seoul"            # seoul | tago
+  stop_id: "17102"
+  keys:
+    seoul: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+    tago: ""
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
@@ -63,7 +57,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 + Todoist: fetch tasks and render in 2 columns (10 items each, total 20)
 + Verse: /set -> verse input that shows on board
 + Bot duplication guard (file lock) to avoid double polling
-+ Bus (Seoul/Gyeonggi/Incheon): real APIs + stop change via Telegram + board display
++ Bus: Seoul arrival info via TOPIS API with Telegram configuration
 """
 
 # Code below is organized with clearly marked sections.
@@ -73,12 +67,22 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
+from typing import List, Optional, Tuple
+from urllib.parse import quote
 
 import yaml
 import requests
+import html
+import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 import telebot
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
+    level=logging.INFO,
+)
+log = logging.getLogger("bus")
 # ======= Embedded-block helpers (final) ======================================
 import tempfile, os, yaml
 
@@ -193,14 +197,12 @@ DEFAULT_CFG = {
         "project_id": "",                  # optional: limit to project
         "max_items": 20                    # UI는 좌10/우10
     },
-    # Bus (서울/경기/인천) 설정
+    # Bus 설정
     "bus": {
-        "region": "seoul",                 # seoul | gyeonggi | incheon
-        "seoul":   {"api_key": "", "ars_id": ""},        # ars_id 예: "02139"
-        "gyeonggi":{"api_key": "", "station_id": ""},    # station_id 예: "200000078"
-        "incheon": {"api_key": "", "stop_id": ""},       # stop_id 예: "160000484"
-        "max_items": 8,
-        "routes_whitelist": []             # 예: ["7016","M7106"] 비워두면 전체
+        "region": "서울",
+        "api": "seoul",
+        "stop_id": "17102",
+        "keys": {"seoul": "", "tago": ""},
     }
 }
 CFG = load_config_from_embedded(DEFAULT_CFG)
@@ -417,189 +419,137 @@ def _extract_min_from_msg(msg: str):
     if not msg: return None
     m = re.search(r"(\d+)\s*분", msg)
     return _as_int(m.group(1)) if m else None
+def _pick_text(elem: Optional[ET.Element], tag: str) -> str:
+    if elem is None:
+        return ""
+    child = elem.find(tag)
+    return html.unescape(child.text) if (child is not None and child.text) else ""
 
-def fetch_bus_seoul(api_key: str, ars_id: str, whitelist=None, max_items=8):
-    """
-    서울시 버스 정류소(arsId) 도착정보
-    API: https://ws.bus.go.kr/api/rest/stationinfo/getStationByUid?serviceKey=...&arsId=...&_type=json
-    Fallback: XML 파싱
-    """
-    base = "https://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
-    params = {"serviceKey": api_key, "arsId": ars_id, "_type": "json"}
-    stop_name = ""
-    items = []
-    try:
-        r = requests.get(base, params=params, timeout=10); r.raise_for_status()
-        js = r.json()
-        body = (js.get("msgBody") or
-                (js.get("ServiceResult", {}).get("msgBody") if isinstance(js.get("ServiceResult"), dict) else None))
-        arr = (body or {}).get("itemList") or []
-        if isinstance(arr, dict): arr = [arr]
-        for it in arr:
-            rt = it.get("rtNm") or it.get("busRouteNm") or ""
-            if whitelist and rt not in whitelist: continue
-            msg1 = it.get("arrmsg1") or ""
-            msg2 = it.get("arrmsg2") or ""
-            dest = it.get("adirection") or it.get("dir") or ""
-            stop_name = it.get("stNm") or stop_name
-            items.append({
-                "route": rt,
-                "to": dest,
-                "msg1": msg1,
-                "msg2": msg2,
-                "min1": _extract_min_from_msg(msg1),
-                "min2": _extract_min_from_msg(msg2),
-            })
-    except ValueError:
-        # JSON 파싱 실패 -> XML 시도
-        rx = requests.get(base, params={"serviceKey": api_key, "arsId": ars_id}, timeout=10); rx.raise_for_status()
-        root = ET.fromstring(rx.text)
-        for it in root.iterfind(".//itemList"):
-            rt = (it.findtext("rtNm") or it.findtext("busRouteNm") or "")
-            if whitelist and rt not in whitelist: continue
-            msg1 = it.findtext("arrmsg1") or ""
-            msg2 = it.findtext("arrmsg2") or ""
-            dest = it.findtext("adirection") or it.findtext("dir") or ""
-            stnm = it.findtext("stNm") or ""
-            if stnm: stop_name = stnm
-            items.append({
-                "route": rt, "to": dest, "msg1": msg1, "msg2": msg2,
-                "min1": _extract_min_from_msg(msg1), "min2": _extract_min_from_msg(msg2),
-            })
-    # 정렬: 예상 도착 분(min1) 오름차순, None은 뒤로
-    items.sort(key=lambda x: (9999 if x["min1"] is None else x["min1"], x["route"]))
-    return {"region": "seoul", "stop_name": stop_name or f"arsId {ars_id}", "items": items[:max_items]}
 
-def fetch_bus_gyeonggi(api_key: str, station_id: str, whitelist=None, max_items=8):
-    """
-    경기도 정류소(stationId) 도착정보
-    API: https://apis.data.go.kr/6410000/busarrivalservice/getBusArrivalList?serviceKey=...&stationId=...&resultType=json
-    Fallback: XML 파싱
-    """
-    base = "https://apis.data.go.kr/6410000/busarrivalservice/getBusArrivalList"
-    params = {"serviceKey": api_key, "stationId": station_id, "resultType": "json"}
-    stop_name = ""
-    items = []
-    try:
-        r = requests.get(base, params=params, timeout=10); r.raise_for_status()
-        js = r.json()
-        body = (js.get("response") or {}).get("msgBody") or {}
-        # 일부 엔드포인트는 배열을 바로 내보내기도 함
-        arr = body.get("busArrivalList") or body.get("busArrivalResult") or body.get("itemList") or body
-        if isinstance(arr, dict):
-            arr = [arr]
-        for it in arr:
-            # 노선 명칭
-            rt = it.get("routeName") or it.get("routeNo") or it.get("routeNumber") or ""
-            if not rt and it.get("routeId"):
-                rt = str(it.get("routeId"))
-            if whitelist and rt not in whitelist: continue
-            # 예측 분
-            p1 = _as_int(it.get("predictTime1")) if it.get("predictTime1") is not None else None
-            p2 = _as_int(it.get("predictTime2")) if it.get("predictTime2") is not None else None
-            # 행선지
-            dest = it.get("staOrder") or it.get("direction") or ""
-            # 메시지 구성
-            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
-            msg2 = "" if p2 is None else (f"{p2}분" if p2 > 0 else "곧 도착")
-            # 정류소명은 이 API에서 직접 안줄 수 있어 공백 유지
-            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
-    except ValueError:
-        # JSON 파싱 실패 -> XML 시도
-        rx = requests.get(base, params={"serviceKey": api_key, "stationId": station_id}, timeout=10); rx.raise_for_status()
-        root = ET.fromstring(rx.text)
-        for it in root.iterfind(".//busArrivalList"):
-            rt = it.findtext("routeName") or it.findtext("routeNo") or ""
-            if not rt:
-                rid = it.findtext("routeId")
-                if rid: rt = rid
-            if whitelist and rt not in whitelist: continue
-            p1 = _as_int(it.findtext("predictTime1"))
-            p2 = _as_int(it.findtext("predictTime2"))
-            dest = it.findtext("direction") or it.findtext("staOrder") or ""
-            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
-            msg2 = "" if p2 is None else (f"{p2}분" if p2 > 0 else "곧 도착")
-            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
-    items.sort(key=lambda x: (9999 if x["min1"] is None else x["min1"], x["route"]))
-    return {"region": "gyeonggi", "stop_name": stop_name or f"stationId {station_id}", "items": items[:max_items]}
+def _normalize_arrmsg(msg: str, fallback_minutes: Optional[int]) -> Tuple[str, str]:
+    """메시지에서 'N분', 'N번째 전' 등을 추출"""
+    if not msg and fallback_minutes is None:
+        return ("", "")
+    if fallback_minutes is not None:
+        return ("곧 도착", "") if fallback_minutes <= 0 else (f"{fallback_minutes}분", "")
+    m_min = re.search(r"(\d+)\s*분", msg or "")
+    m_hops = re.search(r"(\d+)\s*번째\s*전", msg or "")
+    t = f"{m_min.group(1)}분" if m_min else ("곧 도착" if "곧 도착" in (msg or "") else (msg or ""))
+    hops = f"{m_hops.group(1)}정거장" if m_hops else ""
+    return (t, hops)
 
-def fetch_bus_incheon(api_key: str, stop_id: str, whitelist=None, max_items=8):
-    """
-    인천광역시 정류소(bstopId) 도착정보
-    API: https://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList?serviceKey=...&bstopId=...&_type=json
-    Fallback: XML 파싱
-    """
-    base = "https://apis.data.go.kr/6280000/busArrivalService/getBusArrivalList"
-    params = {"serviceKey": api_key, "bstopId": stop_id, "pageNo": 1, "numOfRows": 999, "_type": "json"}
-    stop_name = ""
-    items = []
+
+def _seoul_station_by_uid(ars_id: str, service_key: str) -> List[str]:
+    url = (
+        "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
+        f"?serviceKey={quote(service_key)}&arsId={quote(str(ars_id))}"
+    )
+    r = requests.get(url, timeout=7)
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    lines: List[str] = []
+    for it in root.iter("itemList"):
+        rtNm = _pick_text(it, "rtNm")
+        arrmsg1 = _pick_text(it, "arrmsg1")
+        traTime1 = _pick_text(it, "traTime1")
+        fallback = round(int(traTime1) / 60) if traTime1.isdigit() else None
+        t1, hops = _normalize_arrmsg(arrmsg1, fallback)
+        if not rtNm:
+            continue
+        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+    lines = [ln for ln in lines if ln.strip()]
+    if lines:
+        def keyf(s: str):
+            first = s.split("\t", 1)[0]
+            return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
+        lines.sort(key=keyf)
+    return lines
+
+
+def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> List[str]:
+    url = (
+        "http://ws.bus.go.kr/api/rest/arrive/getLowArrInfoByStIdList"
+        f"?serviceKey={quote(service_key)}&stId={quote(str(ars_id_as_stid))}"
+    )
+    r = requests.get(url, timeout=7)
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    lines: List[str] = []
+    for it in root.iter("itemList"):
+        rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
+        arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
+        traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
+        fallback = round(int(traTime) / 60) if traTime.isdigit() else None
+        t1, hops = _normalize_arrmsg(arrmsg, fallback)
+        if not rtNm:
+            continue
+        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+    lines = [ln for ln in lines if ln.strip()]
+    if lines:
+        def keyf(s: str):
+            first = s.split("\t", 1)[0]
+            return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", first)]
+        lines.sort(key=keyf)
+    return lines
+
+
+def seoul_get_by_ars(ars_id: str, service_key: str) -> List[str]:
+    if not service_key:
+        return ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"]
     try:
-        r = requests.get(base, params=params, timeout=10); r.raise_for_status()
-        js = r.json()
-        body = (js.get("response") or {}).get("body") or {}
-        arr = body.get("items") or body.get("itemList") or body.get("item") or []
-        if isinstance(arr, dict):
-            arr = arr.get("item") or [arr]
-        for it in arr:
-            rt = it.get("routeNo") or it.get("routeName") or it.get("lineNo") or ""
-            if whitelist and rt not in whitelist:
-                continue
-            p1 = _as_int(it.get("predictTime1") or it.get("min1"))
-            p2 = _as_int(it.get("predictTime2") or it.get("min2"))
-            dest = it.get("destination") or it.get("dir") or it.get("routeDestination") or ""
-            stop_name = it.get("bstopNm") or stop_name
-            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
-            msg2 = "" if p2 is None else ("곧 도착" if p2 == 0 else f"{p2}분")
-            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
-    except ValueError:
-        rx = requests.get(
-            base,
-            params={"serviceKey": api_key, "bstopId": stop_id, "pageNo": 1, "numOfRows": 999},
-            timeout=10,
-        )
-        rx.raise_for_status()
-        root = ET.fromstring(rx.text)
-        for it in root.iterfind(".//item"):
-            rt = it.findtext("routeNo") or it.findtext("routeName") or it.findtext("lineNo") or ""
-            if whitelist and rt not in whitelist:
-                continue
-            p1 = _as_int(it.findtext("predictTime1") or it.findtext("min1"))
-            p2 = _as_int(it.findtext("predictTime2") or it.findtext("min2"))
-            dest = it.findtext("destination") or it.findtext("dir") or it.findtext("routeDestination") or ""
-            stnm = it.findtext("bstopNm") or ""
-            if stnm:
-                stop_name = stnm
-            msg1 = "곧 도착" if p1 == 0 else (f"{p1}분" if p1 is not None else "")
-            msg2 = "" if p2 is None else ("곧 도착" if p2 == 0 else f"{p2}분")
-            items.append({"route": rt, "to": dest, "msg1": msg1, "msg2": msg2, "min1": p1, "min2": p2})
-    items.sort(key=lambda x: (9999 if x["min1"] is None else x["min1"], x["route"]))
-    return {"region": "incheon", "stop_name": stop_name or f"bstopId {stop_id}", "items": items[:max_items]}
+        primary = _seoul_station_by_uid(ars_id, service_key)
+        if primary:
+            return primary
+    except requests.RequestException as e:
+        log.warning(f"getStationByUid error: {e}")
+    except ET.ParseError as e:
+        log.warning(f"XML parse error (primary): {e}")
+    try:
+        backup = _seoul_low_by_stid(ars_id, service_key)
+        if backup:
+            return backup
+    except requests.RequestException as e:
+        log.warning(f"getLowArrInfoByStIdList error: {e}")
+    except ET.ParseError as e:
+        log.warning(f"XML parse error (backup): {e}")
+    return ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"]
+
+
+def tago_stub(stop_id: str, key: str, region: str) -> List[str]:
+    return [
+        "TAGO(국토부) API는 도시코드/노드ID가 추가로 필요합니다.",
+        "서울은 seoul API 사용을 권장합니다. (원하면 TAGO 실구현 붙여드릴게요)",
+    ]
+
 
 def fetch_bus():
     cfg = CFG.get("bus", {}) or {}
-    region = (cfg.get("region") or "seoul").lower()
-    wl = cfg.get("routes_whitelist") or []
-    max_items = int(cfg.get("max_items", 8))
-    if region == "seoul":
-        key = (cfg.get("seoul") or {}).get("api_key", "").strip()
-        ars = (cfg.get("seoul") or {}).get("ars_id", "").strip()
-        if not key or not ars:
-            return {"need_config": True, "region": "seoul"}
-        return fetch_bus_seoul(key, ars, whitelist=wl, max_items=max_items)
-    elif region == "gyeonggi":
-        key = (cfg.get("gyeonggi") or {}).get("api_key", "").strip()
-        sid = (cfg.get("gyeonggi") or {}).get("station_id", "").strip()
-        if not key or not sid:
-            return {"need_config": True, "region": "gyeonggi"}
-        return fetch_bus_gyeonggi(key, sid, whitelist=wl, max_items=max_items)
-    elif region == "incheon":
-        key = (cfg.get("incheon") or {}).get("api_key", "").strip()
-        sid = (cfg.get("incheon") or {}).get("stop_id", "").strip()
-        if not key or not sid:
-            return {"need_config": True, "region": "incheon"}
-        return fetch_bus_incheon(key, sid, whitelist=wl, max_items=max_items)
+    region = cfg.get("region", "서울")
+    api = cfg.get("api", "seoul")
+    stop_id = cfg.get("stop_id", "")
+    keys = cfg.get("keys", {}) or {}
+    if api == "seoul":
+        key = keys.get("seoul", "").strip()
+        if not key or not stop_id:
+            return {"need_config": True, "region": region}
+        lines = seoul_get_by_ars(stop_id, key)
+        items = []
+        for ln in lines:
+            parts = ln.split("\t")
+            rt = parts[0] if len(parts) > 0 else ""
+            msg1 = parts[1] if len(parts) > 1 else ""
+            msg2 = parts[2] if len(parts) > 2 else ""
+            items.append({
+                "route": rt,
+                "msg1": msg1,
+                "msg2": msg2,
+                "min1": _extract_min_from_msg(msg1),
+            })
+        return {"region": region, "stop_name": stop_id, "items": items[:8]}
     else:
-        return {"need_config": True, "region": region}
+        lines = tago_stub(stop_id, keys.get("tago", ""), region)
+        items = [{"route": ln, "msg1": "", "msg2": "", "min1": None} for ln in lines]
+        return {"region": region, "stop_name": stop_id, "items": items}
 
 
 # === [SECTION: Photo file listing for board background] ======================
@@ -1654,23 +1604,26 @@ if TB:
         elif c.data == "cfg_bus":
             TB.answer_callback_query(c.id)
             bus = CFG.get("bus", {})
-            rgn = bus.get("region", "seoul")
-            s_se = bus.get("seoul", {}) or {}
-            s_gg = bus.get("gyeonggi", {}) or {}
+            rgn = bus.get("region", "서울")
+            api = bus.get("api", "seoul")
+            sid = bus.get("stop_id", "")
+            keys = bus.get("keys", {}) or {}
+            key_status = "등록됨" if keys.get(api) else "미등록"
             msg = [
                 "* Bus config *",
                 f"- region : {rgn}",
-                f"- seoul.ars_id : {s_se.get('ars_id','')}",
-                f"- gyeonggi.station_id : {s_gg.get('station_id','')}",
-                f"- routes_whitelist : {', '.join(bus.get('routes_whitelist', [])) or '(all)'}",
+                f"- api : {api}",
+                f"- stop_id : {sid}",
+                f"- key({api}) : {key_status}",
                 "",
                 "Choose an action:",
             ]
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
-                telebot.types.InlineKeyboardButton("Change region (seoul/gyeonggi)", callback_data="bus_set_region"),
-                telebot.types.InlineKeyboardButton("Change stop id (arsId / stationId)", callback_data="bus_set_stop"),
-                telebot.types.InlineKeyboardButton("Set routes filter", callback_data="bus_set_routes"),
+                telebot.types.InlineKeyboardButton("Change region", callback_data="bus_set_region"),
+                telebot.types.InlineKeyboardButton("Change api", callback_data="bus_set_api"),
+                telebot.types.InlineKeyboardButton("Change stop id", callback_data="bus_set_stop"),
+                telebot.types.InlineKeyboardButton("Set API key", callback_data="bus_set_key"),
                 telebot.types.InlineKeyboardButton("Test fetch", callback_data="bus_test"),
             )
             TB.send_message(c.message.chat.id, "\n".join(msg), reply_markup=kb, parse_mode="Markdown")
@@ -1678,7 +1631,7 @@ if TB:
             TB.answer_callback_query(c.id, "Coming soon")
 
     # ---- Bus settings flow
-    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_region","bus_set_stop","bus_set_routes","bus_test"))
+    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_region","bus_set_api","bus_set_stop","bus_set_key","bus_test"))
     def on_cb_bus(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "Not authorized."); return
@@ -1686,17 +1639,16 @@ if TB:
         uid = c.from_user.id
         if c.data == "bus_set_region":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_region"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Type region: seoul or gyeonggi. (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "Type region: 서울|경기|인천. (/cancel to abort)")
+        elif c.data == "bus_set_api":
+            st = load_state(); st[str(uid)] = {"mode":"await_bus_api"}; save_state(st)
+            TB.send_message(c.message.chat.id, "Type api: seoul or tago. (/cancel to abort)")
         elif c.data == "bus_set_stop":
-            rgn = (CFG.get("bus", {}) or {}).get("region", "seoul")
             st = load_state(); st[str(uid)] = {"mode":"await_bus_stop"}; save_state(st)
-            if rgn == "seoul":
-                TB.send_message(c.message.chat.id, "Enter Seoul arsId (e.g., 02139). (/cancel to abort)")
-            else:
-                TB.send_message(c.message.chat.id, "Enter Gyeonggi stationId (e.g., 200000078). (/cancel to abort)")
-        elif c.data == "bus_set_routes":
-            st = load_state(); st[str(uid)] = {"mode":"await_bus_routes"}; save_state(st)
-            TB.send_message(c.message.chat.id, "Enter route numbers separated by spaces or commas (e.g., 7016 M7106). Send * to clear. (/cancel to abort)")
+            TB.send_message(c.message.chat.id, "Enter stop id (ARS). (/cancel to abort)")
+        elif c.data == "bus_set_key":
+            st = load_state(); st[str(uid)] = {"mode":"await_bus_key"}; save_state(st)
+            TB.send_message(c.message.chat.id, "Enter API key for current api. (/cancel to abort)")
         elif c.data == "bus_test":
             try:
                 data = fetch_bus()
@@ -1880,38 +1832,40 @@ if TB:
 
         # bus: region
         if st.get("mode") == "await_bus_region":
-            val = (m.text or "").strip().lower()
-            if val not in ("seoul","gyeonggi"):
-                TB.reply_to(m, "Invalid. Type seoul or gyeonggi."); return
+            val = (m.text or "").strip()
             CFG["bus"]["region"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, f"Bus region set to {val}.")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
-        # bus: stop id
-        if st.get("mode") == "await_bus_stop":
-            val = (m.text or "").strip()
-            rgn = CFG.get("bus",{}).get("region","seoul")
-            if rgn == "seoul":
-                CFG["bus"]["seoul"]["ars_id"] = val
-            else:
-                CFG["bus"]["gyeonggi"]["station_id"] = val
+        # bus: api
+        if st.get("mode") == "await_bus_api":
+            val = (m.text or "").strip().lower()
+            if val not in ("seoul","tago"):
+                TB.reply_to(m, "Invalid. Type seoul or tago."); return
+            CFG["bus"]["api"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, f"Bus stop updated ({rgn}).")
+            TB.reply_to(m, f"Bus api set to {val}.")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
-        # bus: routes whitelist
-        if st.get("mode") == "await_bus_routes":
-            txt = (m.text or "").strip()
-            if txt == "*":
-                CFG["bus"]["routes_whitelist"] = []
-            else:
-                parts = [x.strip() for x in re.split(r"[,\s]+", txt) if x.strip()]
-                CFG["bus"]["routes_whitelist"] = parts
+        # bus: stop id
+        if st.get("mode") == "await_bus_stop":
+            val = (m.text or "").strip()
+            CFG["bus"]["stop_id"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, "Routes filter updated.")
+            TB.reply_to(m, "Bus stop updated.")
+            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
+            return
+
+        # bus: api key
+        if st.get("mode") == "await_bus_key":
+            val = (m.text or "").strip()
+            api = CFG.get("bus", {}).get("api", "seoul")
+            CFG["bus"].setdefault("keys", {})[api] = val
+            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
+            TB.reply_to(m, f"{api} API key updated.")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
