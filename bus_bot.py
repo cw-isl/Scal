@@ -96,27 +96,31 @@ def _pick_text(elem: Optional[ET.Element], tag: str) -> str:
     return html.unescape(child.text) if (child is not None and child.text) else ""
 
 
-def _normalize_arrmsg(msg: str, fallback_minutes: Optional[int]) -> Tuple[str, str]:
+def _normalize_arrmsg(msg: str, fallback_seconds: Optional[int]) -> Tuple[str, str]:
     """
     msg: '3분 후[2번째 전]' -> ('3분', '2정거장')
-    fallback_minutes: traTime(초)로 얻은 분(반올림). 0이하 → '곧 도착'
+    fallback_seconds: traTime(초). 120초 미만 → '곧 도착'
     """
-    if not msg and fallback_minutes is None:
+    if not msg and fallback_seconds is None:
         return ("", "")
 
     # traTime 기반 우선
-    if fallback_minutes is not None:
-        if fallback_minutes <= 0:
-            return ("곧 도착", "0정거장")
-        return (f"{fallback_minutes}분", "")
+    if fallback_seconds is not None:
+        if fallback_seconds < 120:
+            return ("곧 도착", "1정거장")
+        minutes = fallback_seconds // 60
+        return (f"{minutes}분", "1정거장")
 
     # 메시지에서 'N분', 'N번째 전' 추출
     m_min = re.search(r"(\d+)\s*분", msg or "")
     m_hops = re.search(r"(\d+)\s*번째\s*전", msg or "")
-    t = f"{m_min.group(1)}분" if m_min else ("곧 도착" if "곧 도착" in (msg or "") else (msg or ""))
+    if m_min and int(m_min.group(1)) < 2:
+        t = "곧 도착"
+    else:
+        t = f"{m_min.group(1)}분" if m_min else ("곧 도착" if "곧 도착" in (msg or "") else (msg or ""))
     hops = f"{m_hops.group(1)}정거장" if m_hops else ""
-    if t == "곧 도착" and not hops:
-        hops = "0정거장"
+    if not hops or hops == "0정거장":
+        hops = "1정거장"
     return (t, hops)
 
 
@@ -139,16 +143,11 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
         rtNm = _pick_text(it, "rtNm")
         arrmsg1 = _pick_text(it, "arrmsg1")
         traTime1 = _pick_text(it, "traTime1")
-        fallback = round(int(traTime1) / 60) if traTime1.isdigit() else None
+        fallback = int(traTime1) if traTime1.isdigit() else None
         t1, hops = _normalize_arrmsg(arrmsg1, fallback)
         if not rtNm:
             continue
-        parts = [rtNm]
-        if hops:
-            parts.append(hops)
-        if t1:
-            parts.append(t1)
-        line = "\t".join(parts)
+        line = " ".join([rtNm, hops, t1])
         m = re.search(r"(\d+)", t1)
         minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
         records.append((minutes, line))
@@ -177,16 +176,11 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
         rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
         arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
         traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
-        fallback = round(int(traTime) / 60) if traTime.isdigit() else None
+        fallback = int(traTime) if traTime.isdigit() else None
         t1, hops = _normalize_arrmsg(arrmsg, fallback)
         if not rtNm:
             continue
-        parts = [rtNm]
-        if hops:
-            parts.append(hops)
-        if t1:
-            parts.append(t1)
-        line = "\t".join(parts)
+        line = " ".join([rtNm, hops, t1])
         m = re.search(r"(\d+)", t1)
         minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
         records.append((minutes, line))
