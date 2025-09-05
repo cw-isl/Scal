@@ -35,7 +35,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ===== 사용자 제공 정보 =====
-BOT_TOKEN = "8203763129:AAH3AUckwP5nY-SZ9aVd-F6Rh6Jakb145SA"
+# 프레임 통합 스크립트(scal_full_integrated.py)와 동일한 토큰을 사용합니다.
+BOT_TOKEN = "7523443246:AAF-fHGcw4NLgDQDRbDz7j1xOTEFYfeZPQ0"
 ALLOWED_USER_IDS = {5517670242}
 
 # 환경변수로 키를 미리 줄 수도 있음
