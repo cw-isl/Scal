@@ -942,7 +942,7 @@ BOARD_HTML = r"""
   .bus .item{display:flex; font-size:14px; white-space:nowrap;}
   .bus .item .rt{font-weight:700; width:8ch; white-space:nowrap;}
   .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
-  .bus .item .msg{flex:1; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .bus .item .msg{flex:0 0 6ch; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
