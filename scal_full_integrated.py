@@ -470,7 +470,7 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
         t1, hops = _normalize_arrmsg(arrmsg1, fallback)
         if not rtNm:
             continue
-        line = " ".join([rtNm, hops, t1])
+        line = "\t".join(filter(None, [rtNm, hops, t1]))
         m = re.search(r"(\d+)", t1)
         minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
         records.append((minutes, line))
@@ -500,7 +500,7 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
         t1, hops = _normalize_arrmsg(arrmsg, fallback)
         if not rtNm:
             continue
-        line = " ".join([rtNm, hops, t1])
+        line = "\t".join(filter(None, [rtNm, hops, t1]))
         m = re.search(r"(\d+)", t1)
         minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
         records.append((minutes, line))
@@ -1698,7 +1698,7 @@ if TB:
                         parts.append(it["msg2"])
                     if it.get("msg1"):
                         parts.append(it["msg1"])
-                    lines.append(" ".join(parts))
+                    lines.append("\t".join(parts))
                 if len(lines)==1:
                     lines.append("(정보 없음)")
                 TB.send_message(c.message.chat.id, "\n".join(lines))
