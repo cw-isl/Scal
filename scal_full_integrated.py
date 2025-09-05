@@ -939,10 +939,10 @@ BOARD_HTML = r"""
   .bus .stop{font-size:14px; margin-bottom:4px;}
   .bus .rows{display:flex; gap:10px; overflow:hidden;}
   .bus .col{flex:1 1 50%; display:flex; flex-direction:column; gap:6px;}
-  .bus .item{display:flex; font-size:14px;}
-  .bus .item .rt{font-weight:700; width:8ch;}
-  .bus .item .hops{width:6ch; text-align:right; margin-right:4px;}
-  .bus .item .msg{flex:1; text-align:right; opacity:.9;}
+  .bus .item{display:flex; font-size:14px; white-space:nowrap;}
+  .bus .item .rt{font-weight:700; width:8ch; white-space:nowrap;}
+  .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
+  .bus .item .msg{flex:1; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
