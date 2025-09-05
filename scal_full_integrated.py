@@ -462,7 +462,12 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
         t1, hops = _normalize_arrmsg(arrmsg1, fallback)
         if not rtNm:
             continue
-        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+        parts = [rtNm]
+        if hops:
+            parts.append(hops)
+        if t1:
+            parts.append(t1)
+        lines.append("\t".join(parts))
     lines = [ln for ln in lines if ln.strip()]
     if lines:
         def keyf(s: str):
@@ -492,7 +497,12 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
         t1, hops = _normalize_arrmsg(arrmsg, fallback)
         if not rtNm:
             continue
-        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+        parts = [rtNm]
+        if hops:
+            parts.append(hops)
+        if t1:
+            parts.append(t1)
+        lines.append("\t".join(parts))
     lines = [ln for ln in lines if ln.strip()]
     if lines:
         def keyf(s: str):
@@ -546,13 +556,13 @@ def fetch_bus():
         for ln in lines:
             parts = ln.split("\t")
             rt = parts[0] if len(parts) > 0 else ""
-            msg1 = parts[1] if len(parts) > 1 else ""
-            msg2 = parts[2] if len(parts) > 2 else ""
+            hops = parts[1] if len(parts) > 1 else ""
+            tmsg = parts[2] if len(parts) > 2 else ""
             items.append({
                 "route": rt,
-                "msg1": msg1,
-                "msg2": msg2,
-                "min1": _extract_min_from_msg(msg1),
+                "msg1": tmsg,
+                "msg2": hops,
+                "min1": _extract_min_from_msg(tmsg),
             })
         items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
         items = items[:8]
@@ -1685,7 +1695,12 @@ if TB:
                     return
                 lines = [f"[{data['region']}] {data.get('stop_name','')}"]
                 for it in data.get("items", [])[:10]:
-                    lines.append(f"{it['route']}: {it.get('msg1','')} {('/ '+it['msg2']) if it.get('msg2') else ''}")
+                    parts = [it["route"]]
+                    if it.get("msg2"):
+                        parts.append(it["msg2"])
+                    if it.get("msg1"):
+                        parts.append(it["msg1"])
+                    lines.append(" ".join(parts))
                 if len(lines)==1:
                     lines.append("(정보 없음)")
                 TB.send_message(c.message.chat.id, "\n".join(lines))

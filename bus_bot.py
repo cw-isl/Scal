@@ -16,8 +16,8 @@ Seoul Bus Arrival (BIS-style) Telegram Bot — PTB v21 compatible (Ubuntu 25.04)
 - 서울 TOPIS: getStationByUid(ARS) 우선 → 빈결과/오류 시 getLowArrInfoByStIdList 보조 시도
 - 탭 구분 출력(예)
     47\t곧 도착
-    14-1\t4분\t2정거장
-    1302\t32분\t11정거장
+    14-1\t2정거장\t4분
+    1302\t11정거장\t32분
 """
 
 from __future__ import annotations
@@ -139,7 +139,12 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
         t1, hops = _normalize_arrmsg(arrmsg1, fallback)
         if not rtNm:
             continue
-        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+        parts = [rtNm]
+        if hops:
+            parts.append(hops)
+        if t1:
+            parts.append(t1)
+        lines.append("\t".join(parts))
 
     lines = [ln for ln in lines if ln.strip()]
     if lines:
@@ -172,7 +177,12 @@ def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List
         t1, hops = _normalize_arrmsg(arrmsg, fallback)
         if not rtNm:
             continue
-        lines.append(f"{rtNm}\t{t1}\t{hops}".rstrip())
+        parts = [rtNm]
+        if hops:
+            parts.append(hops)
+        if t1:
+            parts.append(t1)
+        lines.append("\t".join(parts))
 
     lines = [ln for ln in lines if ln.strip()]
     if lines:
