@@ -1573,7 +1573,7 @@ if TB:
             TB.answer_callback_query(c.id)
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
-                telebot.types.InlineKeyboardButton("정류소ID 변경", callback_data="bus_set_stop"),
+                telebot.types.InlineKeyboardButton("정류소 변경", callback_data="bus_set_stop"),
                 telebot.types.InlineKeyboardButton("서비스키 변경", callback_data="bus_set_key"),
                 telebot.types.InlineKeyboardButton("현재설정 조회", callback_data="bus_show_config"),
                 telebot.types.InlineKeyboardButton("지정정류소 현황조회", callback_data="bus_test"),
