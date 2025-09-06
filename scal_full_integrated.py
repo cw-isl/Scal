@@ -571,9 +571,13 @@ def bb_tago_get_city_list(service_key: str) -> List[Tuple[str, str]]:
         "http://apis.data.go.kr/1613000/BusRouteInfoInqireService/getCtyCodeList"
         f"?serviceKey={quote(service_key)}"
     )
-    r = requests.get(url, timeout=7)
-    r.raise_for_status()
-    root = ET.fromstring(r.text)
+    try:
+        r = requests.get(url, timeout=7)
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+    except Exception as e:
+        log.warning("City list fetch failed: %s", e)
+        return []
     for it in root.iter("item"):
         name = _pick_text(it, "cityname") or _pick_text(it, "cityName")
         code = _pick_text(it, "citycode") or _pick_text(it, "cityCode")
@@ -679,6 +683,12 @@ async def bb_cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     st = bb_ensure_user_state(update.effective_user.id)
     cities = bb_tago_get_city_list(st["key"])
+    if not cities:
+        st["awaiting"] = "keyword"
+        await update.message.reply_text(
+            "도시 목록을 가져오지 못했습니다. 서비스 키를 확인하거나 직접 도시 코드를 입력하세요."
+        )
+        return
     await update.message.reply_text(
         "도시를 선택하세요", reply_markup=bb_build_city_keyboard(cities, 0)
     )
@@ -726,6 +736,20 @@ async def bb_on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     st = bb_ensure_user_state(uid)
     if st.get("awaiting") == "keyword":
         kw = (update.message.text or "").strip()
+        if not st.get("city_code"):
+            if bb_is_tago_node_id(kw):
+                st["node_id"] = kw
+                st["awaiting"] = None
+                await update.message.reply_text(f"✔ 정류소 등록 완료: {kw}")
+                return
+            if kw.isdigit():
+                st["city_code"] = kw
+                await update.message.reply_text(
+                    "정류소명을 입력하세요", reply_markup=ForceReply(selective=True)
+                )
+                return
+            await update.message.reply_text("도시 코드를 먼저 입력하세요.")
+            return
         if bb_is_tago_node_id(kw):
             st["node_id"] = kw
             st["awaiting"] = None
