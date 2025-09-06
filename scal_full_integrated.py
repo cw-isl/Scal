@@ -1,43 +1,45 @@
 # ======= EMBEDDED BLOCKS (auto-managed by Telegram commands) ===============
-# ==== EMBEDDED_CONFIG (YAML) START
-EMBEDDED_CONFIG = r"""server:
-  port: 5320
-
-frame:
-  tz: Asia/Seoul
-  ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
-
-weather:
-  provider: openweathermap
-  api_key: 9809664c22a3501382380f2781e1a9da
-  location: Seoul, South Korea
-  units: metric
-
-telegram:
-  bot_token: 7523443246:AAF-fHGcw4NLgDQDRbDz7j1xOTEFYfeZPQ0
-  allowed_user_ids:
-    - 5517670242
-  mode: polling
-  webhook_base: ''
-  path_secret: ''
-
-google:
-  scopes:
-    - https://www.googleapis.com/auth/calendar
-  calendar:
-    id: bob.gondrae@gmail.com
-
-todoist:
-  api_token: "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b"
-  max_items: 20
-
-# ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
-bus:
-  city_code: ""
-  node_id: ""
-  key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-"""
-# ==== EMBEDDED_CONFIG (YAML) END
+# ==== EMBEDDED_CONFIG (JSON) START
+EMBEDDED_CONFIG = r"""{
+  "server": {
+    "port": 5320
+  },
+  "frame": {
+    "tz": "Asia/Seoul",
+    "ical_url": "https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics"
+  },
+  "weather": {
+    "provider": "openweathermap",
+    "api_key": "9809664c22a3501382380f2781e1a9da",
+    "location": "Seoul, South Korea",
+    "units": "metric"
+  },
+  "telegram": {
+    "bot_token": "7523443246:AAF-fHGcw4NLgDQDRbDz7j1xOTEFYfeZPQ0",
+    "allowed_user_ids": [5517670242],
+    "mode": "polling",
+    "webhook_base": "",
+    "path_secret": ""
+  },
+  "google": {
+    "scopes": [
+      "https://www.googleapis.com/auth/calendar"
+    ],
+    "calendar": {
+      "id": "bob.gondrae@gmail.com"
+    }
+  },
+  "todoist": {
+    "api_token": "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b",
+    "max_items": 20
+  },
+  "bus": {
+    "city_code": "",
+    "node_id": "",
+    "key": "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
+  }
+}"""
+# ==== EMBEDDED_CONFIG (JSON) END
 
 # ==== EMBEDDED_VERSES START
 EMBEDDED_VERSES = r"""테스트"""
@@ -67,7 +69,6 @@ from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-import yaml
 import requests
 import html
 import logging
@@ -81,10 +82,9 @@ logging.basicConfig(
 )
 log = logging.getLogger("bus")
 # ======= Embedded-block helpers (final) ======================================
-import tempfile, os, yaml
-
-CFG_START = "# ==== EMBEDDED_CONFIG (YAML) START"
-CFG_END   = "# ==== EMBEDDED_CONFIG (YAML) END"
+import tempfile, os, json
+CFG_START = "# ==== EMBEDDED_CONFIG (JSON) START"
+CFG_END   = "# ==== EMBEDDED_CONFIG (JSON) END"
 VER_START = "# ==== EMBEDDED_VERSES START"
 VER_END   = "# ==== EMBEDDED_VERSES END"
 
@@ -125,7 +125,7 @@ def _write_block(new_text: str, start_tag: str, end_tag: str, file_path: str = _
     _atomic_write(file_path, _replace_block_in_text(src, start_tag, end_tag, wrapped))
 
 def load_config_from_embedded(defaults: dict):
-    data = yaml.safe_load(_read_block(CFG_START, CFG_END)) or {}
+    data = json.loads(_read_block(CFG_START, CFG_END) or "{}")
     def deep_fill(dst, src):
         for k, v in src.items():
             if k not in dst:
@@ -135,8 +135,9 @@ def load_config_from_embedded(defaults: dict):
         return dst
     return deep_fill(data, defaults)
 
-def save_config_to_source(new_yaml_text: str, file_path: str = __file__):
-    _write_block(new_yaml_text, CFG_START, CFG_END, file_path=file_path)
+def save_config_to_source(new_data: dict, file_path: str = __file__):
+    json_text = json.dumps(new_data, ensure_ascii=False, indent=2)
+    _write_block(json_text, CFG_START, CFG_END, file_path=file_path)
 
 def get_verse() -> str:
     return _read_block(VER_START, VER_END).strip()
@@ -157,7 +158,6 @@ except Exception:
 
 # === [SECTION: Paths / Base config file locations] ===========================
 BASE = Path("/root/scal")
-CFG_PATH = BASE / "sframe.yaml"
 STATE_PATH = BASE / "sframe_state.json"
 PHOTOS_DIR = BASE / "frame_photos"
 GCLIENT_PATH = BASE / "google_client_secret.json"
@@ -187,9 +187,9 @@ DEFAULT_CFG = {
         "calendar": {"id": "primary"}
 
 },
-    # Todoist (yaml에서 설정) — 여기 값은 기본값
+    # Todoist (config에서 설정) — 여기 값은 기본값
     "todoist": {
-        "api_token": "",                   # yaml에 넣은 토큰 사용; 비어있으면 비활성
+        "api_token": "",                   # 설정에 넣은 토큰 사용; 비어있으면 비활성
         "filter": "today | overdue",       # Todoist filter query
         "project_id": "",                  # optional: limit to project
         "max_items": 20                    # UI는 좌10/우10
@@ -202,22 +202,6 @@ DEFAULT_CFG = {
     }
 }
 CFG = load_config_from_embedded(DEFAULT_CFG)
-
-# === [SECTION: YAML loader + default writer] ===============================
-def load_yaml(p: Path, defaults: dict):
-    """Load YAML with defaults; write default file if missing."""
-    if not p.exists():
-        p.write_text(yaml.safe_dump(defaults, allow_unicode=True, sort_keys=False), encoding="utf-8")
-        print(f"[CFG] Default config created: {p}  (edit as needed)")
-    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    def deep_fill(dst, src):
-        for k, v in src.items():
-            if k not in dst:
-                dst[k] = v
-            elif isinstance(v, dict):
-                dst[k] = deep_fill(dst.get(k, {}) or {}, v)
-        return dst
-    return deep_fill(data, defaults)
 
 # === [SECTION: Timezone utilities] ===========================================
 TZ = timezone(timedelta(hours=9)) if CFG["frame"]["tz"] == "Asia/Seoul" else timezone.utc
@@ -2042,7 +2026,7 @@ if TB:
             if not (new_url.startswith("http://") or new_url.startswith("https://")):
                 TB.reply_to(m, "Invalid URL. Please send http/https URL."); return
             CFG["frame"]["ical_url"] = new_url
-            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
+            save_config_to_source(CFG)
             global _ical_cache
             _ical_cache = {"url": None, "ts": 0.0, "events": []}
             TB.reply_to(m, "iCal URL updated. Board will auto-refresh in ~1-2 min.")
@@ -2064,7 +2048,7 @@ if TB:
             if len(parts) < 2:
                 TB.reply_to(m, "형식: 도시코드 노드ID (예: 11 115000123)"); return
             CFG["bus"]["city_code"], CFG["bus"]["node_id"] = parts[0], parts[1]
-            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
+            save_config_to_source(CFG)
             TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
@@ -2073,7 +2057,7 @@ if TB:
         if st.get("mode") == "await_bus_key":
             val = (m.text or "").strip()
             CFG["bus"]["key"] = val
-            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
+            save_config_to_source(CFG)
             TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
@@ -2155,7 +2139,7 @@ def start_telegram():
             return start_polling()
         secret = CFG["telegram"].get("path_secret") or secrets.token_urlsafe(24)
         CFG["telegram"]["path_secret"] = secret
-        save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
+        save_config_to_source(CFG)
         hook_url = f"{base}/tg/{secret}"
         TB.remove_webhook()
         TB.set_webhook(url=hook_url, drop_pending_updates=True)
