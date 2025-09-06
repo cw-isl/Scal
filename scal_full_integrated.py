@@ -751,6 +751,42 @@ def run_bus_bot():
     app.run_polling()
 
 
+# Telebot helper keyboards for bus configuration
+def tb_build_city_keyboard(cities: List[Tuple[str, str]], page: int = 0) -> telebot.types.InlineKeyboardMarkup:
+    per = 10
+    items = bb_paginate(cities, page, per)
+    kb = telebot.types.InlineKeyboardMarkup()
+    for name, code in items:
+        kb.add(telebot.types.InlineKeyboardButton(f"{name}", callback_data=f"bus_city:{code}"))
+    nav = []
+    if page > 0:
+        nav.append(telebot.types.InlineKeyboardButton("⬅️", callback_data=f"bus_citypage:{page-1}"))
+    if (page + 1) * per < len(cities):
+        nav.append(telebot.types.InlineKeyboardButton("➡️", callback_data=f"bus_citypage:{page+1}"))
+    if nav:
+        kb.row(*nav)
+    return kb
+
+
+def tb_build_stop_keyboard(
+    stops: List[Tuple[str, str, str]], page: int = 0
+) -> telebot.types.InlineKeyboardMarkup:
+    per = 10
+    items = bb_paginate(stops, page, per)
+    kb = telebot.types.InlineKeyboardMarkup()
+    for name, ars, node in items:
+        label = f"{name} {ars}" if ars else name
+        kb.add(telebot.types.InlineKeyboardButton(label, callback_data=f"bus_stop:{node}"))
+    nav = []
+    if page > 0:
+        nav.append(telebot.types.InlineKeyboardButton("⬅️", callback_data=f"bus_stoppage:{page-1}"))
+    if (page + 1) * per < len(stops):
+        nav.append(telebot.types.InlineKeyboardButton("➡️", callback_data=f"bus_stoppage:{page+1}"))
+    if nav:
+        kb.row(*nav)
+    return kb
+
+
 # === [SECTION: Photo file listing for board background] ======================
 def list_local_images():
     exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -1831,17 +1867,26 @@ if TB:
             TB.answer_callback_query(c.id, "Coming soon")
 
     # ---- Bus settings flow
-    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_stop","bus_set_key","bus_show_config","bus_test"))
+    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_stop", "bus_set_key", "bus_show_config", "bus_test"))
     def on_cb_bus(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "Not authorized."); return
         TB.answer_callback_query(c.id)
         uid = c.from_user.id
         if c.data == "bus_set_stop":
-            st = load_state(); st[str(uid)] = {"mode":"await_bus_stop"}; save_state(st)
-            TB.send_message(c.message.chat.id, "도시코드와 노드ID를 입력하세요. 예) 11 115000123")
+            key = CFG.get("bus", {}).get("key", "").strip()
+            if not key:
+                TB.send_message(c.message.chat.id, "서비스키가 설정되지 않았습니다.")
+                return
+            cities = bb_tago_get_city_list(key)
+            st = load_state(); st[str(uid)] = {"mode": "bus_city"}; save_state(st)
+            TB.send_message(
+                c.message.chat.id,
+                "도시를 선택하세요",
+                reply_markup=tb_build_city_keyboard(cities, 0),
+            )
         elif c.data == "bus_set_key":
-            st = load_state(); st[str(uid)] = {"mode":"await_bus_key"}; save_state(st)
+            st = load_state(); st[str(uid)] = {"mode": "await_bus_key"}; save_state(st)
             TB.send_message(c.message.chat.id, "서비스키를 입력하세요.")
         elif c.data == "bus_show_config":
             bus = CFG.get("bus", {})
@@ -1860,7 +1905,7 @@ if TB:
                 if data.get("need_config"):
                     TB.send_message(c.message.chat.id, "버스 설정이 부족합니다.")
                     return
-                lines = [data.get('stop_name','')]
+                lines = [data.get("stop_name", "")]
                 for it in data.get("items", [])[:10]:
                     parts = [it["route"]]
                     if it.get("msg2"):
@@ -1868,11 +1913,61 @@ if TB:
                     if it.get("msg1"):
                         parts.append(it["msg1"])
                     lines.append("\t".join(parts))
-                if len(lines)==1:
+                if len(lines) == 1:
                     lines.append("(정보 없음)")
                 TB.send_message(c.message.chat.id, "\n".join(lines))
             except Exception as e:
                 TB.send_message(c.message.chat.id, f"검색 실패: {e}")
+
+    @TB.callback_query_handler(
+        func=lambda c: c.data.startswith(
+            ("bus_city", "bus_citypage", "bus_stop", "bus_stoppage")
+        )
+    )
+    def on_cb_bus_flow(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        uid = c.from_user.id
+        st_all = load_state()
+        st = st_all.get(str(uid), {})
+        if c.data.startswith("bus_citypage:"):
+            page = int(c.data.split(":", 1)[1])
+            key = CFG.get("bus", {}).get("key", "")
+            cities = bb_tago_get_city_list(key)
+            TB.edit_message_reply_markup(
+                c.message.chat.id,
+                c.message.message_id,
+                reply_markup=tb_build_city_keyboard(cities, page),
+            )
+            return
+        if c.data.startswith("bus_city:"):
+            code = c.data.split(":", 1)[1]
+            st_all[str(uid)] = {"mode": "bus_keyword", "city_code": code}
+            save_state(st_all)
+            TB.send_message(
+                c.message.chat.id,
+                "정류소명을 입력하세요",
+                reply_markup=telebot.types.ForceReply(selective=False),
+            )
+            return
+        if c.data.startswith("bus_stoppage:"):
+            page = int(c.data.split(":", 1)[1])
+            stops = st.get("stop_results", [])
+            TB.edit_message_reply_markup(
+                c.message.chat.id,
+                c.message.message_id,
+                reply_markup=tb_build_stop_keyboard(stops, page),
+            )
+            return
+        if c.data.startswith("bus_stop:"):
+            node = c.data.split(":", 1)[1]
+            CFG["bus"]["city_code"] = st.get("city_code", "")
+            CFG["bus"]["node_id"] = node
+            save_config_to_source(CFG)
+            st_all.pop(str(uid), None); save_state(st_all)
+            TB.send_message(c.message.chat.id, f"정류소 등록 완료: {node}")
+            return
 
     # ---- Add flow
     @TB.callback_query_handler(func=lambda c: c.data.startswith(("cal_add","add_year","add_month","add_day","end_same_","add_eyear","add_emonth","add_eday")))
@@ -2041,16 +2136,29 @@ if TB:
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
-        # bus: stop id (city code + node id)
-        if st.get("mode") == "await_bus_stop":
-            val = (m.text or "").strip()
-            parts = val.split()
-            if len(parts) < 2:
-                TB.reply_to(m, "형식: 도시코드 노드ID (예: 11 115000123)"); return
-            CFG["bus"]["city_code"], CFG["bus"]["node_id"] = parts[0], parts[1]
-            save_config_to_source(CFG)
-            TB.reply_to(m, "변경완료")
-            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
+        # bus: keyword -> search stops or accept nodeId directly
+        if st.get("mode") in ("bus_keyword", "bus_stop"):
+            kw = (m.text or "").strip()
+            city = st.get("city_code", "")
+            if bb_is_tago_node_id(kw):
+                CFG["bus"]["city_code"] = city
+                CFG["bus"]["node_id"] = kw
+                save_config_to_source(CFG)
+                TB.reply_to(m, "변경완료")
+                allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
+                return
+            key = CFG.get("bus", {}).get("key", "")
+            stops = bb_tago_search_stops(city, kw, key)
+            if not stops:
+                TB.reply_to(m, "검색 결과가 없습니다. 다시 입력해주세요.")
+                return
+            st.update({"mode": "bus_stop", "stop_results": stops})
+            save_state({**load_state(), str(m.from_user.id): st})
+            TB.send_message(
+                m.chat.id,
+                "정류소를 선택하세요",
+                reply_markup=tb_build_stop_keyboard(stops, 0),
+            )
             return
 
         # bus: api key
