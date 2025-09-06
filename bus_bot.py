@@ -6,11 +6,9 @@ Seoul Bus Arrival (BIS-style) Telegram Bot — PTB v21 compatible (Ubuntu 25.04)
 
 명령:
   /start
-  /bus                      : 현재(region/api/id)로 도착정보 조회
-  /set region <서울|경기|인천>
-  /set api <seoul|tago>     : 현재 seoul 실동작, tago는 안내
-  /set id <정류장ARS번호>   : 예) /set id 17102
-  /set key <키>             : data.go.kr 발급 인증키(인코딩/디코딩 그대로 OK)
+  /bus                      : 현재 설정으로 도착정보 조회
+  /set id <도시코드> <노드ID>
+  /set key <TAGO서비스키>
 
 특징:
 - 서울 TOPIS: getStationByUid(ARS) 우선 → 빈결과/오류 시 getLowArrInfoByStIdList 보조 시도
@@ -39,13 +37,14 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 BOT_TOKEN = "7523443246:AAF-fHGcw4NLgDQDRbDz7j1xOTEFYfeZPQ0"
 ALLOWED_USER_IDS = {5517670242}
 
-# 환경변수로 키를 미리 줄 수도 있음
-SEOUL_SERVICE_KEY = os.environ.get("SEOUL_API_KEY", "").strip()
-TAGO_SERVICE_KEY = os.environ.get("TAGO_API_KEY", "").strip()
+# TAGO 서비스키 (환경변수 TAGO_API_KEY 우선)
+TAGO_SERVICE_KEY = os.environ.get(
+    "TAGO_API_KEY",
+    "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f",
+).strip()
 
-DEFAULT_REGION = "서울"
-DEFAULT_API = "seoul"
-DEFAULT_STOP_ID = "17102"   # 서울 ARS 번호
+DEFAULT_CITY = ""
+DEFAULT_NODE = ""
 
 # 간단 세션(유저별 상태)
 USER_STATE: Dict[int, Dict[str, Any]] = {}
@@ -62,10 +61,9 @@ log = logging.getLogger("busbot")
 def ensure_user_state(uid: int) -> Dict[str, Any]:
     if uid not in USER_STATE:
         USER_STATE[uid] = {
-            "region": DEFAULT_REGION,
-            "api": DEFAULT_API,
-            "stop_id": DEFAULT_STOP_ID,
-            "keys": {"seoul": SEOUL_SERVICE_KEY, "tago": TAGO_SERVICE_KEY},
+            "city_code": DEFAULT_CITY,
+            "node_id": DEFAULT_NODE,
+            "key": TAGO_SERVICE_KEY,
         }
     return USER_STATE[uid]
 
@@ -124,12 +122,11 @@ def _normalize_arrmsg(msg: str, fallback_seconds: Optional[int]) -> Tuple[str, s
     return (t, hops)
 
 
-# ===== 서울 API 호출 =====
-def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
-    """TOPIS: 정류장 ARS번호 기반 getStationByUid"""
+# ===== TAGO API 호출 =====
+def tago_get_arrivals(city_code: str, node_id: str, service_key: str) -> Tuple[str, List[str]]:
     url = (
-        "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
-        f"?serviceKey={quote(service_key)}&arsId={quote(str(ars_id))}"
+        "http://apis.data.go.kr/1613000/BusArrivalService/getBusArrivalList"
+        f"?serviceKey={quote(service_key)}&cityCode={quote(str(city_code))}&nodeId={quote(str(node_id))}"
     )
     r = requests.get(url, timeout=7)
     r.raise_for_status()
@@ -137,14 +134,16 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
 
     records: List[Tuple[int, str]] = []
     stop_name = ""
-    for it in root.iter("itemList"):
+    for it in root.iter("item"):
         if not stop_name:
-            stop_name = _pick_text(it, "stNm")
-        rtNm = _pick_text(it, "rtNm")
-        arrmsg1 = _pick_text(it, "arrmsg1")
-        traTime1 = _pick_text(it, "traTime1")
-        fallback = int(traTime1) if traTime1.isdigit() else None
-        t1, hops = _normalize_arrmsg(arrmsg1, fallback)
+            stop_name = _pick_text(it, "nodenm") or _pick_text(it, "nodeNm")
+        rtNm = _pick_text(it, "routeno") or _pick_text(it, "routeNo")
+        arr = _pick_text(it, "arrtime") or _pick_text(it, "predictTime1")
+        hops_raw = _pick_text(it, "arrsttnm") or _pick_text(it, "arriveRemainSeatCnt")
+        seconds = int(arr) if arr and arr.isdigit() else None
+        t1, hops = _normalize_arrmsg("", seconds)
+        if hops_raw and hops_raw.isdigit():
+            hops = f"{hops_raw}정거장"
         if not rtNm:
             continue
         line = "\t".join(filter(None, [rtNm, hops, t1]))
@@ -156,74 +155,6 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
     records.sort(key=lambda x: x[0])
     lines = [r[1] for r in records]
     return stop_name, lines
-
-
-def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List[str]]:
-    """보조: getLowArrInfoByStIdList (계정/오퍼레이션에 따라 응답 형식 다름)"""
-    url = (
-        "http://ws.bus.go.kr/api/rest/arrive/getLowArrInfoByStIdList"
-        f"?serviceKey={quote(service_key)}&stId={quote(str(ars_id_as_stid))}"
-    )
-    r = requests.get(url, timeout=7)
-    r.raise_for_status()
-    root = ET.fromstring(r.text)
-
-    records: List[Tuple[int, str]] = []
-    stop_name = ""
-    for it in root.iter("itemList"):
-        if not stop_name:
-            stop_name = _pick_text(it, "stNm")
-        rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
-        arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
-        traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
-        fallback = int(traTime) if traTime.isdigit() else None
-        t1, hops = _normalize_arrmsg(arrmsg, fallback)
-        if not rtNm:
-            continue
-        line = "\t".join(filter(None, [rtNm, hops, t1]))
-        m = re.search(r"(\d+)", t1)
-        minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
-        records.append((minutes, line))
-
-    records = [r for r in records if r[1].strip()]
-    records.sort(key=lambda x: x[0])
-    lines = [r[1] for r in records]
-    return stop_name, lines
-
-
-def seoul_get_by_ars(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
-    """서울 도착정보: 우선 getStationByUid → 없으면 보조 API 시도"""
-    if not service_key:
-        return ("", ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"])
-
-    try:
-        name, primary = _seoul_station_by_uid(ars_id, service_key)
-        if primary:
-            return name, primary
-    except requests.RequestException as e:
-        log.warning(f"getStationByUid error: {e}")
-    except ET.ParseError as e:
-        log.warning(f"XML parse error (primary): {e}")
-
-    # 보조 시도
-    try:
-        name, backup = _seoul_low_by_stid(ars_id, service_key)
-        if backup:
-            return name, backup
-    except requests.RequestException as e:
-        log.warning(f"getLowArrInfoByStIdList error: {e}")
-    except ET.ParseError as e:
-        log.warning(f"XML parse error (backup): {e}")
-
-    return ("", ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"])
-
-
-# ===== TAGO (안내) =====
-def tago_stub(stop_id: str, key: str, region: str) -> List[str]:
-    return [
-        "TAGO(국토부) API는 도시코드/노드ID가 추가로 필요합니다.",
-        "서울은 seoul API 사용을 권장합니다. (원하면 TAGO 실구현 붙여드릴게요)",
-    ]
 
 
 # ===== 핸들러 =====
@@ -234,12 +165,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🚌 버스 도착정보 봇\n"
         "- /bus\n"
-        "- /set region <서울|경기|인천>\n"
-        "- /set api <seoul|tago>\n"
-        "- /set id <정류장ARS>\n"
+        "- /set id <도시코드> <노드ID>\n"
         "- /set key <서비스키>\n\n"
-        f"현재설정: region={st['region']} / api={st['api']} / id={st['stop_id']} / "
-        f"key={'등록됨' if st['keys'].get(st['api']) else '미등록'}"
+        f"현재설정: city={st['city_code']} / node={st['node_id']} / key={'등록됨' if st['key'] else '미등록'}"
     )
 
 
@@ -247,15 +175,11 @@ async def cmd_bus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not check_auth(update):
         return
     st = ensure_user_state(update.effective_user.id)
-    region, api, stop_id = st["region"], st["api"], st["stop_id"]
-    key = st["keys"].get(api, "")
+    city, node, key = st["city_code"], st["node_id"], st["key"]
 
-    await update.message.reply_text(f"⏳ 조회 중… (region={region}, api={api}, id={stop_id})")
-    if api == "seoul":
-        stop_name, lines = seoul_get_by_ars(stop_id, key)
-    else:
-        stop_name, lines = "", tago_stub(stop_id, key, region)
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text(f"⏳ 조회 중… (city={city}, node={node})")
+    stop_name, lines = tago_get_arrivals(city, node, key)
+    await update.message.reply_text("\n".join(lines) if lines else "정보가 없습니다.")
 
 
 async def cmd_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,47 +188,24 @@ async def cmd_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     st = ensure_user_state(update.effective_user.id)
     text = (update.message.text or "").strip()
 
-    if text.lower().startswith("/set region"):
-        arg = extract_arg(text)
-        if not arg:
-            await update.message.reply_text("사용법: /set region <서울|경기|인천>")
+    if text.lower().startswith("/set id"):
+        args = extract_arg2(text)
+        if len(args) < 2:
+            await update.message.reply_text("사용법: /set id <도시코드> <노드ID>")
             return
-        st["region"] = arg
-        await update.message.reply_text(f"✔ region = {arg}")
-
-    elif text.lower().startswith("/set api"):
-        arg = extract_arg(text).lower()
-        if arg not in {"seoul", "tago"}:
-            await update.message.reply_text("사용법: /set api <seoul|tago>")
-            return
-        st["api"] = arg
-        await update.message.reply_text(f"✔ api = {arg}  (key: {'등록됨' if st['keys'].get(arg) else '미등록'})")
-
-    elif text.lower().startswith("/set id"):
-        arg = extract_arg(text)
-        if not arg or not re.fullmatch(r"\d+", arg):
-            await update.message.reply_text("사용법: /set id <정류장ARS번호(숫자)>  예) /set id 17102")
-            return
-        st["stop_id"] = arg
-        await update.message.reply_text(f"✔ id = {arg}")
+        st["city_code"], st["node_id"] = args[0], args[1]
+        await update.message.reply_text(f"✔ id = {args[0]} {args[1]}")
 
     elif text.lower().startswith("/set key"):
-        args = extract_arg2(text)
-        if len(args) == 1:
-            the_api, the_key = st["api"], args[0]
-        elif len(args) >= 2:
-            the_api, the_key = args[0].lower(), " ".join(args[1:])
-            if the_api not in {"seoul", "tago"}:
-                await update.message.reply_text("사용법: /set key <키>  또는  /set key <seoul|tago> <키>")
-                return
-        else:
-            await update.message.reply_text("사용법: /set key <키>  또는  /set key <seoul|tago> <키>")
+        arg = extract_arg(text)
+        if not arg:
+            await update.message.reply_text("사용법: /set key <서비스키>")
             return
-        st["keys"][the_api] = the_key.strip()
-        await update.message.reply_text(f"✔ {the_api} 서비스키 등록 완료")
+        st["key"] = arg.strip()
+        await update.message.reply_text("✔ 서비스키 등록 완료")
 
     else:
-        await update.message.reply_text("사용법: /set region|api|id|key ...")
+        await update.message.reply_text("사용법: /set id|key ...")
 
 
 def main():

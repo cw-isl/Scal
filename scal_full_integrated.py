@@ -33,12 +33,9 @@ todoist:
 
 # ===== BusInfo (단일 프로필, 텔레그램에서 station_id 입력) =====
 bus:
-  region: "서울"
-  api: "seoul"            # seoul | tago
-  stop_id: "17102"
-  keys:
-    seoul: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
-    tago: ""
+  city_code: ""
+  node_id: ""
+  key: "3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f"
 """
 # ==== EMBEDDED_CONFIG (YAML) END
 
@@ -57,7 +54,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 + Todoist: fetch tasks and render in 2 columns (10 items each, total 20)
 + Verse: /set -> verse input that shows on board
 + Bot duplication guard (file lock) to avoid double polling
-+ Bus: Seoul arrival info via TOPIS API with Telegram configuration
++ Bus: nationwide arrival info via TAGO API with Telegram configuration
 """
 
 # Code below is organized with clearly marked sections.
@@ -199,10 +196,9 @@ DEFAULT_CFG = {
     },
     # Bus 설정
     "bus": {
-        "region": "서울",
-        "api": "seoul",
-        "stop_id": "17102",
-        "keys": {"seoul": "", "tago": ""},
+        "city_code": "",
+        "node_id": "",
+        "key": "",
     }
 }
 CFG = load_config_from_embedded(DEFAULT_CFG)
@@ -450,24 +446,26 @@ def _normalize_arrmsg(msg: str, fallback_seconds: Optional[int]) -> Tuple[str, s
     return (t, hops)
 
 
-def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
+def tago_get_arrivals(city_code: str, node_id: str, service_key: str) -> Tuple[str, List[str]]:
     url = (
-        "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
-        f"?serviceKey={quote(service_key)}&arsId={quote(str(ars_id))}"
+        "http://apis.data.go.kr/1613000/BusArrivalService/getBusArrivalList"
+        f"?serviceKey={quote(service_key)}&cityCode={quote(str(city_code))}&nodeId={quote(str(node_id))}"
     )
     r = requests.get(url, timeout=7)
     r.raise_for_status()
     root = ET.fromstring(r.text)
     records: List[Tuple[int, str]] = []
     stop_name = ""
-    for it in root.iter("itemList"):
+    for it in root.iter("item"):
         if not stop_name:
-            stop_name = _pick_text(it, "stNm")
-        rtNm = _pick_text(it, "rtNm")
-        arrmsg1 = _pick_text(it, "arrmsg1")
-        traTime1 = _pick_text(it, "traTime1")
-        fallback = int(traTime1) if traTime1.isdigit() else None
-        t1, hops = _normalize_arrmsg(arrmsg1, fallback)
+            stop_name = _pick_text(it, "nodenm") or _pick_text(it, "nodeNm")
+        rtNm = _pick_text(it, "routeno") or _pick_text(it, "routeNo")
+        arr = _pick_text(it, "arrtime") or _pick_text(it, "predictTime1")
+        hops_raw = _pick_text(it, "arrsttnm") or _pick_text(it, "arriveRemainSeatCnt")
+        seconds = int(arr) if arr and arr.isdigit() else None
+        t1, hops = _normalize_arrmsg("", seconds)
+        if hops_raw and hops_raw.isdigit():
+            hops = f"{hops_raw}정거장"
         if not rtNm:
             continue
         line = "\t".join(filter(None, [rtNm, hops, t1]))
@@ -478,97 +476,31 @@ def _seoul_station_by_uid(ars_id: str, service_key: str) -> Tuple[str, List[str]
     records.sort(key=lambda x: x[0])
     lines = [r[1] for r in records]
     return stop_name, lines
-
-
-def _seoul_low_by_stid(ars_id_as_stid: str, service_key: str) -> Tuple[str, List[str]]:
-    url = (
-        "http://ws.bus.go.kr/api/rest/arrive/getLowArrInfoByStIdList"
-        f"?serviceKey={quote(service_key)}&stId={quote(str(ars_id_as_stid))}"
-    )
-    r = requests.get(url, timeout=7)
-    r.raise_for_status()
-    root = ET.fromstring(r.text)
-    records: List[Tuple[int, str]] = []
-    stop_name = ""
-    for it in root.iter("itemList"):
-        if not stop_name:
-            stop_name = _pick_text(it, "stNm")
-        rtNm = _pick_text(it, "rtNm") or _pick_text(it, "busRouteNm")
-        arrmsg = _pick_text(it, "arrmsg1") or _pick_text(it, "arrmsg")
-        traTime = _pick_text(it, "traTime1") or _pick_text(it, "traTime")
-        fallback = int(traTime) if traTime.isdigit() else None
-        t1, hops = _normalize_arrmsg(arrmsg, fallback)
-        if not rtNm:
-            continue
-        line = "\t".join(filter(None, [rtNm, hops, t1]))
-        m = re.search(r"(\d+)", t1)
-        minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
-        records.append((minutes, line))
-    records = [r for r in records if r[1].strip()]
-    records.sort(key=lambda x: x[0])
-    lines = [r[1] for r in records]
-    return stop_name, lines
-
-
-def seoul_get_by_ars(ars_id: str, service_key: str) -> Tuple[str, List[str]]:
-    if not service_key:
-        return ("", ["❗️서울 API 서비스키가 설정되지 않았습니다. /set key <키값>"])
-    try:
-        name, primary = _seoul_station_by_uid(ars_id, service_key)
-        if primary:
-            return name, primary
-    except requests.RequestException as e:
-        log.warning(f"getStationByUid error: {e}")
-    except ET.ParseError as e:
-        log.warning(f"XML parse error (primary): {e}")
-    try:
-        name, backup = _seoul_low_by_stid(ars_id, service_key)
-        if backup:
-            return name, backup
-    except requests.RequestException as e:
-        log.warning(f"getLowArrInfoByStIdList error: {e}")
-    except ET.ParseError as e:
-        log.warning(f"XML parse error (backup): {e}")
-    return ("", ["해당 정류장의 도착정보가 없습니다. (ARS/오퍼레이션 확인 필요)"])
-
-
-def tago_stub(stop_id: str, key: str, region: str) -> List[str]:
-    return [
-        "TAGO(국토부) API는 도시코드/노드ID가 추가로 필요합니다.",
-        "서울은 seoul API 사용을 권장합니다. (원하면 TAGO 실구현 붙여드릴게요)",
-    ]
 
 
 def fetch_bus():
     cfg = CFG.get("bus", {}) or {}
-    region = cfg.get("region", "서울")
-    api = cfg.get("api", "seoul")
-    stop_id = cfg.get("stop_id", "")
-    keys = cfg.get("keys", {}) or {}
-    if api == "seoul":
-        key = keys.get("seoul", "").strip()
-        if not key or not stop_id:
-            return {"need_config": True, "region": region}
-        stop_name, lines = seoul_get_by_ars(stop_id, key)
-        items = []
-        for ln in lines:
-            parts = ln.split("\t")
-            rt = parts[0] if len(parts) > 0 else ""
-            hops = parts[1] if len(parts) > 1 else ""
-            tmsg = parts[2] if len(parts) > 2 else ""
-            items.append({
-                "route": rt,
-                "msg1": tmsg,
-                "msg2": hops,
-                "min1": _extract_min_from_msg(tmsg),
-            })
-        items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
-        items = items[:14]
-        return {"region": region, "stop_name": stop_name, "stop_id": stop_id, "items": items}
-    else:
-        lines = tago_stub(stop_id, keys.get("tago", ""), region)
-        items = [{"route": ln, "msg1": "", "msg2": "", "min1": None} for ln in lines]
-        return {"region": region, "stop_name": stop_id, "stop_id": stop_id, "items": items}
+    city = cfg.get("city_code", "").strip()
+    node = cfg.get("node_id", "").strip()
+    key = cfg.get("key", "").strip()
+    if not (city and node and key):
+        return {"need_config": True}
+    stop_name, lines = tago_get_arrivals(city, node, key)
+    items = []
+    for ln in lines:
+        parts = ln.split("\t")
+        rt = parts[0] if len(parts) > 0 else ""
+        hops = parts[1] if len(parts) > 1 else ""
+        tmsg = parts[2] if len(parts) > 2 else ""
+        items.append({
+            "route": rt,
+            "msg1": tmsg,
+            "msg2": hops,
+            "min1": _extract_min_from_msg(tmsg),
+        })
+    items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
+    items = items[:14]
+    return {"city_code": city, "stop_name": stop_name, "node_id": node, "items": items}
 
 
 # === [SECTION: Photo file listing for board background] ======================
@@ -1256,7 +1188,7 @@ async function refreshBus(){
     if(!r.ok) return;
     const data = await r.json();
     const stopEl = document.getElementById('bus-stop');
-    if(stopEl) stopEl.textContent = data.stop_name ? `${data.stop_name} (${data.stop_id || ''})` : '';
+    if(stopEl) stopEl.textContent = data.stop_name ? `${data.stop_name} (${data.node_id || ''})` : '';
 
     const left = document.getElementById('bus-left');
     const right = document.getElementById('bus-right');
@@ -1641,8 +1573,6 @@ if TB:
             TB.answer_callback_query(c.id)
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
-                telebot.types.InlineKeyboardButton("지역변경", callback_data="bus_set_region"),
-                telebot.types.InlineKeyboardButton("API변경", callback_data="bus_set_api"),
                 telebot.types.InlineKeyboardButton("정류소ID 변경", callback_data="bus_set_stop"),
                 telebot.types.InlineKeyboardButton("서비스키 변경", callback_data="bus_set_key"),
                 telebot.types.InlineKeyboardButton("현재설정 조회", callback_data="bus_show_config"),
@@ -1653,36 +1583,27 @@ if TB:
             TB.answer_callback_query(c.id, "Coming soon")
 
     # ---- Bus settings flow
-    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_region","bus_set_api","bus_set_stop","bus_set_key","bus_show_config","bus_test"))
+    @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_stop","bus_set_key","bus_show_config","bus_test"))
     def on_cb_bus(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "Not authorized."); return
         TB.answer_callback_query(c.id)
         uid = c.from_user.id
-        if c.data == "bus_set_region":
-            st = load_state(); st[str(uid)] = {"mode":"await_bus_region"}; save_state(st)
-            TB.send_message(c.message.chat.id, "지역을 입력하세요 (서울/경기/인천).")
-        elif c.data == "bus_set_api":
-            st = load_state(); st[str(uid)] = {"mode":"await_bus_api"}; save_state(st)
-            TB.send_message(c.message.chat.id, "API를 입력하세요 (seoul 또는 tago).")
-        elif c.data == "bus_set_stop":
+        if c.data == "bus_set_stop":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_stop"}; save_state(st)
-            TB.send_message(c.message.chat.id, "정류소 ID(ARS)를 입력하세요.")
+            TB.send_message(c.message.chat.id, "도시코드와 노드ID를 입력하세요. 예) 11 115000123")
         elif c.data == "bus_set_key":
             st = load_state(); st[str(uid)] = {"mode":"await_bus_key"}; save_state(st)
-            TB.send_message(c.message.chat.id, "현재 API에 사용할 서비스키를 입력하세요.")
+            TB.send_message(c.message.chat.id, "서비스키를 입력하세요.")
         elif c.data == "bus_show_config":
             bus = CFG.get("bus", {})
-            rgn = bus.get("region", "설정안됨")
-            api = bus.get("api", "설정안됨")
-            sid = bus.get("stop_id", "설정안됨")
-            keys = bus.get("keys", {}) or {}
-            key_status = "등록" if keys.get(api) else "미등록"
+            city = bus.get("city_code", "설정안됨")
+            node = bus.get("node_id", "설정안됨")
+            key_status = "등록" if bus.get("key") else "미등록"
             msg = [
-                f"지역: {rgn}",
-                f"API: {api}",
-                f"정류소ID: {sid}",
-                f"서비스키({api}): {key_status}",
+                f"도시코드: {city}",
+                f"노드ID: {node}",
+                f"서비스키: {key_status}",
             ]
             TB.send_message(c.message.chat.id, "\n".join(msg))
         elif c.data == "bus_test":
@@ -1691,7 +1612,7 @@ if TB:
                 if data.get("need_config"):
                     TB.send_message(c.message.chat.id, "버스 설정이 부족합니다.")
                     return
-                lines = [f"[{data['region']}] {data.get('stop_name','')}"]
+                lines = [data.get('stop_name','')]
                 for it in data.get("items", [])[:10]:
                     parts = [it["route"]]
                     if it.get("msg2"):
@@ -1872,30 +1793,13 @@ if TB:
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
-        # bus: region
-        if st.get("mode") == "await_bus_region":
-            val = (m.text or "").strip()
-            CFG["bus"]["region"] = val
-            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, "변경완료")
-            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
-            return
-
-        # bus: api
-        if st.get("mode") == "await_bus_api":
-            val = (m.text or "").strip().lower()
-            if val not in ("seoul","tago"):
-                TB.reply_to(m, "잘못된 값입니다. seoul 또는 tago를 입력하세요."); return
-            CFG["bus"]["api"] = val
-            save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
-            TB.reply_to(m, "변경완료")
-            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
-            return
-
-        # bus: stop id
+        # bus: stop id (city code + node id)
         if st.get("mode") == "await_bus_stop":
             val = (m.text or "").strip()
-            CFG["bus"]["stop_id"] = val
+            parts = val.split()
+            if len(parts) < 2:
+                TB.reply_to(m, "형식: 도시코드 노드ID (예: 11 115000123)"); return
+            CFG["bus"]["city_code"], CFG["bus"]["node_id"] = parts[0], parts[1]
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
@@ -1904,8 +1808,7 @@ if TB:
         # bus: api key
         if st.get("mode") == "await_bus_key":
             val = (m.text or "").strip()
-            api = CFG.get("bus", {}).get("api", "seoul")
-            CFG["bus"].setdefault("keys", {})[api] = val
+            CFG["bus"]["key"] = val
             save_config_to_source(yaml.safe_dump(CFG, allow_unicode=True, sort_keys=False))
             TB.reply_to(m, "변경완료")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
