@@ -1921,6 +1921,7 @@ def save_state(d):
 TB = telebot.TeleBot(CFG["telegram"]["bot_token"]) if CFG["telegram"]["bot_token"] else None
 ALLOWED = set(CFG["telegram"]["allowed_user_ids"])
 def allowed(uid): return uid in ALLOWED if ALLOWED else True
+KBUS_WAIT = set()
 
 # === [SECTION: Inline calendar add flow UI helpers] ==========================
 def month_days(year: int, month: int) -> int:
@@ -2031,8 +2032,25 @@ if TB:
             [telebot.types.InlineKeyboardButton("5) weather (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("6) manage events", callback_data="cal_manage")],
             [telebot.types.InlineKeyboardButton("7) verse", callback_data="set_verse")],
+            [telebot.types.InlineKeyboardButton("8) 카카오버스 검색", callback_data="kbus_search")],
         ])
         TB.send_message(m.chat.id, "Select category:", reply_markup=kb)
+
+    @TB.message_handler(commands=["bus"])
+    def tb_kbus_cmd(m):
+        if not allowed(m.from_user.id):
+            return TB.reply_to(m, "Not authorized.")
+        parts = m.text.split(maxsplit=1)
+        if len(parts) < 2:
+            return TB.reply_to(m, "사용법: /bus <정류소명 또는 번호>")
+        query = parts[1].strip()
+        try:
+            kbus_apply_search(query)
+            TB.reply_to(m, f"검색 적용: {query}")
+        except subprocess.CalledProcessError as e:
+            TB.reply_to(m, f"실패: {e.output}")
+        except Exception as e:
+            TB.reply_to(m, f"오류: {e}")
 
     # /cal merged into /set option 6
     @TB.callback_query_handler(func=lambda c: c.data == "cal_manage")
@@ -2080,6 +2098,31 @@ if TB:
             TB.send_message(c.message.chat.id, "버스 정보 메뉴를 선택하세요:", reply_markup=kb)
         elif c.data == "noop":
             TB.answer_callback_query(c.id, "Coming soon")
+
+    @TB.callback_query_handler(func=lambda c: c.data == "kbus_search")
+    def on_cb_kbus_search(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        KBUS_WAIT.add(c.from_user.id)
+        TB.send_message(c.message.chat.id, "카카오버스 검색어를 입력하세요.")
+
+    @TB.message_handler(func=lambda m: m.from_user.id in KBUS_WAIT, content_types=["text"])
+    def on_kbus_wait(m):
+        if not allowed(m.from_user.id):
+            return
+        query = (m.text or "").strip()
+        if not query:
+            return
+        try:
+            kbus_apply_search(query)
+            TB.reply_to(m, f"검색 적용: {query}")
+        except subprocess.CalledProcessError as e:
+            TB.reply_to(m, f"실패: {e.output}")
+        except Exception as e:
+            TB.reply_to(m, f"오류: {e}")
+        finally:
+            KBUS_WAIT.discard(m.from_user.id)
 
     # ---- Bus settings flow
     @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_stop", "bus_set_key", "bus_show_config", "bus_test"))
@@ -2573,6 +2616,7 @@ def run_web():
         raise
 
 def main():
+    threading.Thread(target=kbus_scrape_loop, daemon=True).start()
     t = threading.Thread(target=run_web, daemon=True); t.start()
     print(f"[WEB] started on :{CFG['server']['port']}  -> /board")
     start_telegram()
@@ -2585,8 +2629,6 @@ def kbus_entry(argv: List[str]) -> None:
             return
         kbus_apply_search(argv[1])
         return
-    t = threading.Thread(target=kbus_scrape_loop, daemon=True)
-    t.start()
     kbus_run_bot()
 
 
