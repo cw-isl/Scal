@@ -72,8 +72,9 @@ from urllib.parse import quote
 import requests
 import html
 import logging
-from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response
+from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response, session
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
 import telebot
 
 logging.basicConfig(
@@ -1109,6 +1110,27 @@ def api_photos():
 @app.get("/photos/<path:fname>")
 def serve_photo(fname):
     return send_from_directory(str(PHOTOS_DIR), fname)
+
+@app.post('/upload_photo')
+def upload_photo():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    f = request.files.get('photo')
+    if f and f.filename:
+        fname = secure_filename(f.filename)
+        (PHOTOS_DIR / fname).write_bytes(f.read())
+    return redirect('/setting')
+
+@app.post('/delete_photos')
+def delete_photos():
+    if not session.get('logged_in'):
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    for fn in data.get('files', []):
+        p = PHOTOS_DIR / fn
+        if p.is_file():
+            p.unlink()
+    return jsonify({'ok': True})
 
 @app.get("/api/bus")
 def api_bus():
@@ -2319,6 +2341,172 @@ def home():
         google_ok=have_google_libs(),
         token_ok=GTOKEN_PATH.exists(),
         base=str(BASE),
+    )
+
+
+# --- Simple login and landing pages -----------------------------------------
+
+LOGIN_HTML = r"""
+<!doctype html><meta charset="utf-8">
+<title>Login</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;padding:40px;}
+form{max-width:300px;margin:auto;display:flex;flex-direction:column;gap:10px;}
+input{padding:8px;font-size:16px;}
+button{padding:8px;font-size:16px;}
+a{font-size:14px;}
+</style>
+<form method="post">
+  <input name="username" placeholder="Username">
+  <input type="password" name="password" placeholder="Password">
+  <button type="submit">Login</button>
+  <div style="margin-top:10px;font-size:14px;">
+    <a href="#">Forgot your password?</a> | <a href="#">Create an account</a>
+  </div>
+</form>
+"""
+
+LANDING_HTML = r"""
+<!doctype html><meta charset="utf-8">
+<title>Landing</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;padding:20px;}
+.card{width:300px;border:1px solid #ccc;border-radius:8px;overflow:hidden;position:relative;}
+.card img{width:100%;height:180px;background:#eee;}
+.card .title{padding:10px;font-weight:bold;}
+.menu{position:absolute;top:8px;right:8px;}
+.menu button{background:none;border:none;font-size:20px;cursor:pointer;}
+.dropdown{display:none;position:absolute;top:30px;right:0;border:1px solid #ccc;background:#fff;}
+.dropdown a{display:block;padding:6px 12px;text-decoration:none;color:#333;}
+.dropdown a:hover{background:#f0f0f0;}
+</style>
+<div class="card">
+  <div class="menu">
+    <button id="more">⋯</button>
+    <div id="dd" class="dropdown">
+      <a href="/board">View</a>
+      <a href="/setting">Setting</a>
+    </div>
+  </div>
+  <img src="" alt="">
+  <div class="title">My Calendar</div>
+</div>
+<script>
+document.getElementById('more').onclick=()=>{document.getElementById('dd').style.display='block';};
+document.addEventListener('click',e=>{if(!document.getElementById('more').contains(e.target))document.getElementById('dd').style.display='none';});
+</script>
+"""
+
+SETTING_HTML = r"""
+<!doctype html><meta charset="utf-8">
+<title>Settings</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;padding:20px;}
+.hidden{display:none;}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+.thumb{position:relative;}
+.thumb img{width:120px;height:80px;object-fit:cover;border:1px solid #ccc;border-radius:4px;}
+.thumb input[type=checkbox]{position:absolute;top:4px;left:4px;}
+.field{margin:10px 0;}
+.field label{display:block;margin-bottom:4px;}
+.pwd{position:relative;}
+.pwd input{padding-right:30px;}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);cursor:pointer;}
+</style>
+<h2>Photo Management</h2>
+<button id="toggle">Show Photos</button>
+<form id="uploadForm" method="post" action="/upload_photo" enctype="multipart/form-data">
+  <input type="file" name="photo" accept="image/*" capture="environment">
+  <button type="submit">Upload</button>
+  <button type="button" id="delBtn">Delete</button>
+</form>
+<div id="thumbWrap" class="hidden">
+  <div id="thumbs" class="thumbs"></div>
+</div>
+<hr>
+<h2>Keys</h2>
+<form method="post" action="/setting">
+  <div class="field pwd">
+    <label>Weather API Key</label>
+    <input type="password" name="weather_api" value="{{ weather_api }}">
+    <span class="eye" onclick="toggle(this)">👁</span>
+  </div>
+  <div class="field pwd">
+    <label>Todoist Token</label>
+    <input type="password" name="todoist_api" value="{{ todoist_api }}">
+    <span class="eye" onclick="toggle(this)">👁</span>
+  </div>
+  <div class="field pwd">
+    <label>Bus API Key</label>
+    <input type="password" name="bus_key" value="{{ bus_key }}">
+    <span class="eye" onclick="toggle(this)">👁</span>
+  </div>
+  <button type="submit">Save</button>
+</form>
+<script>
+function toggle(span){
+  const inp = span.previousElementSibling;
+  inp.type = inp.type==='password' ? 'text':'password';
+}
+const toggleBtn = document.getElementById('toggle');
+const wrap = document.getElementById('thumbWrap');
+toggleBtn.addEventListener('click', ()=>{
+  wrap.classList.toggle('hidden');
+  if(!wrap.classList.contains('hidden')) loadPhotos();
+});
+function loadPhotos(){
+  fetch('/api/photos').then(r=>r.json()).then(list=>{
+    const div=document.getElementById('thumbs');
+    div.innerHTML='';
+    list.forEach(fn=>{
+      const d=document.createElement('div'); d.className='thumb';
+      d.innerHTML=`<input type='checkbox' value='${fn}'><img src='/photos/${fn}?_=${Date.now()}'>`;
+      div.appendChild(d);
+    });
+  });
+}
+document.getElementById('delBtn').addEventListener('click', ()=>{
+  const sel=[...document.querySelectorAll('.thumb input:checked')].map(i=>i.value);
+  if(!sel.length) return;
+  fetch('/delete_photos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({files:sel})})
+   .then(()=>loadPhotos());
+});
+</script>
+"""
+
+
+@app.route('/login', methods=['GET','POST'])
+def login():
+    if request.method == 'POST':
+        u = request.form.get('username','')
+        p = request.form.get('password','')
+        if u == 'root' and p == 'qwer1234':
+            session['logged_in'] = True
+            return redirect('/landing')
+    return render_template_string(LOGIN_HTML)
+
+
+@app.get('/landing')
+def landing():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    return render_template_string(LANDING_HTML)
+
+
+@app.route('/setting', methods=['GET','POST'])
+def setting():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    if request.method == 'POST':
+        CFG['weather']['api_key'] = request.form.get('weather_api','')
+        CFG['todoist']['api_token'] = request.form.get('todoist_api','')
+        CFG['bus']['key'] = request.form.get('bus_key','')
+        save_config_to_source(CFG)
+    return render_template_string(
+        SETTING_HTML,
+        weather_api=CFG.get('weather',{}).get('api_key',''),
+        todoist_api=CFG.get('todoist',{}).get('api_token',''),
+        bus_key=CFG.get('bus',{}).get('key','')
     )
 
 @app.get("/oauth/start")
