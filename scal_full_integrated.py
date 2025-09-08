@@ -2629,7 +2629,6 @@ def kbus_entry(argv: List[str]) -> None:
             return
         kbus_apply_search(argv[1])
         return
-    threading.Thread(target=kbus_scrape_loop, daemon=True).start()
     kbus_run_bot()
 
 
