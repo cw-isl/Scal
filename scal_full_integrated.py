@@ -63,7 +63,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 # Search for lines like `# === [SECTION: ...] ===` to navigate.
 
 # === [SECTION: Imports / Standard & Third-party] ==============================
-import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET
+import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET, subprocess, sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple
@@ -792,6 +792,177 @@ def run_bus_bot():
     app.add_handler(CallbackQueryHandler(bb_on_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bb_on_message))
     bb_log.info("Bus bot started.")
+    app.run_polling()
+
+
+# === [SECTION: Waydroid KakaoBus automation] ================================
+KBUS_PKG = "com.kakao.bus"
+KBUS_LAUNCH_TRY = 1
+KBUS_OUT = Path("bus.json")
+KBUS_INTERVAL = 10  # seconds
+KBUS_KST = timezone(timedelta(hours=9))
+KBUS_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+KBUS_ALLOWED_IDS = {int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x.strip()}
+
+
+def kbus_sh(*args: str, check: bool = True, text: bool = True):
+    return subprocess.run(args, check=check, text=text, capture_output=True)
+
+
+def kbus_adb(*args: str, check: bool = True):
+    return kbus_sh("adb", *args, check=check)
+
+
+def kbus_set_adb_ime() -> None:
+    kbus_adb("shell", "ime", "enable", "com.android.adbkeyboard/.AdbIME")
+    kbus_adb("shell", "ime", "set", "com.android.adbkeyboard/.AdbIME")
+
+
+def kbus_launch_app() -> None:
+    kbus_adb("shell", "input", "keyevent", "3")
+    time.sleep(0.6)
+    for _ in range(KBUS_LAUNCH_TRY):
+        kbus_adb(
+            "shell",
+            "monkey",
+            "-p",
+            KBUS_PKG,
+            "-c",
+            "android.intent.category.LAUNCHER",
+            "1",
+        )
+        time.sleep(1.2)
+
+
+def kbus_enter_search(query: str) -> None:
+    kbus_adb("shell", "input", "keyevent", "84")
+    time.sleep(0.8)
+    kbus_adb(
+        "shell",
+        "am",
+        "broadcast",
+        "-a",
+        "ADB_INPUT_TEXT",
+        "--es",
+        "msg",
+        query,
+    )
+    time.sleep(0.4)
+    kbus_adb("shell", "input", "keyevent", "66")
+    time.sleep(1.2)
+
+
+def kbus_apply_search(query: str) -> None:
+    kbus_adb("wait-for-device")
+    kbus_set_adb_ime()
+    kbus_launch_app()
+    kbus_enter_search(query)
+    print(f"OK: '{query}' 검색어 적용 완료 (카카오버스 화면 고정 시도)")
+
+
+def kbus_dump_xml(local: Path) -> Path:
+    kbus_adb("shell", "uiautomator", "dump", "/sdcard/view.xml")
+    kbus_adb("pull", "/sdcard/view.xml", str(local))
+    return local
+
+
+def kbus_texts_from(xml_path: Path) -> List[str]:
+    root = ET.parse(xml_path).getroot()
+    res: List[str] = []
+    for node in root.iter():
+        t = node.attrib.get("text")
+        if t:
+            t = " ".join(t.split())
+            if t:
+                res.append(t)
+    return res
+
+
+def kbus_parse_heuristic(texts: List[str]) -> dict:
+    routes, arrivals, meta = [], [], []
+    for t in texts:
+        if ("번" in t and any(c.isdigit() for c in t)) or t.isdigit():
+            routes.append(t)
+        elif any(k in t for k in ("분", "초", "도착", "전", "곧")):
+            arrivals.append(t)
+        elif any(k in t for k in ("정류장", "남음", "방면", "행")):
+            meta.append(t)
+    return {
+        "timestamp": datetime.now(KBUS_KST).isoformat(),
+        "routes": routes[:20],
+        "arrivals": arrivals[:20],
+        "meta": meta[:30],
+        "raw": texts[:200],
+    }
+
+
+def kbus_scrape_loop() -> None:
+    out_dir = KBUS_OUT.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            xml = kbus_dump_xml(out_dir / "view.xml")
+            texts = kbus_texts_from(xml)
+            data = kbus_parse_heuristic(texts)
+            KBUS_OUT.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+            print(f"[{data['timestamp']}] {len(texts)} nodes → {KBUS_OUT}")
+        except Exception as e:
+            print("error:", e)
+        time.sleep(KBUS_INTERVAL)
+
+
+def kbus_allowed(user_id: int) -> bool:
+    return not KBUS_ALLOWED_IDS or user_id in KBUS_ALLOWED_IDS
+
+
+async def kbus_deny(update: Update) -> None:
+    await update.message.reply_text("허용된 사용자만 사용할 수 있습니다.")
+
+
+async def kbus_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    await update.message.reply_text("버스봇입니다. /bus <정류소명 또는 번호> 로 설정하세요.")
+
+
+async def kbus_bus_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    if not context.args:
+        return await update.message.reply_text("사용법: /bus <정류소명 또는 번호>")
+    query = " ".join(context.args)
+    try:
+        kbus_apply_search(query)
+        await update.message.reply_text(f"검색 적용: {query}")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"실패: {e.output}")
+    except Exception as e:
+        await update.message.reply_text(f"오류: {e}")
+
+
+async def kbus_echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    text = (update.message.text or "").strip()
+    if not text:
+        return
+    try:
+        kbus_apply_search(text)
+        await update.message.reply_text(f"검색 적용: {text}")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"실패: {e.output}")
+    except Exception as e:
+        await update.message.reply_text(f"오류: {e}")
+
+
+def kbus_run_bot() -> None:
+    if not KBUS_BOT_TOKEN:
+        print("TELEGRAM_BOT_TOKEN not set; bot disabled")
+        return
+    app = Application.builder().token(KBUS_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", kbus_start_cmd))
+    app.add_handler(CommandHandler("bus", kbus_bus_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, kbus_echo))
     app.run_polling()
 
 
@@ -2406,5 +2577,21 @@ def main():
     print(f"[WEB] started on :{CFG['server']['port']}  -> /board")
     start_telegram()
 
+
+def kbus_entry(argv: List[str]) -> None:
+    if argv and argv[0] == "search":
+        if len(argv) < 2:
+            print("Usage: kbus search '<정류소명 또는 번호>'")
+            return
+        kbus_apply_search(argv[1])
+        return
+    t = threading.Thread(target=kbus_scrape_loop, daemon=True)
+    t.start()
+    kbus_run_bot()
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "kbus":
+        kbus_entry(sys.argv[2:])
+    else:
+        main()
