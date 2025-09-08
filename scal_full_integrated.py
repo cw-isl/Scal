@@ -464,6 +464,24 @@ def tago_get_arrivals(city_code: str, node_id: str, service_key: str) -> Tuple[s
 
 def fetch_bus():
     cfg = CFG.get("bus", {}) or {}
+    json_path = cfg.get("local_json")
+    if json_path:
+        try:
+            js = json.loads(Path(json_path).read_text("utf-8"))
+            routes = js.get("routes") or []
+            arrivals = js.get("arrivals") or []
+            items = []
+            for i, rt in enumerate(routes):
+                msg1 = arrivals[i] if i < len(arrivals) else ""
+                items.append({"route": rt, "msg1": msg1, "msg2": ""})
+            return {
+                "stop_name": (js.get("meta") or [""])[0],
+                "items": items[:14],
+                "timestamp": js.get("timestamp"),
+            }
+        except Exception:
+            pass
+
     city = cfg.get("city_code", "").strip()
     node = cfg.get("node_id", "").strip()
     key = cfg.get("key", "").strip()
@@ -476,12 +494,14 @@ def fetch_bus():
         rt = parts[0] if len(parts) > 0 else ""
         hops = parts[1] if len(parts) > 1 else ""
         tmsg = parts[2] if len(parts) > 2 else ""
-        items.append({
-            "route": rt,
-            "msg1": tmsg,
-            "msg2": hops,
-            "min1": _extract_min_from_msg(tmsg),
-        })
+        items.append(
+            {
+                "route": rt,
+                "msg1": tmsg,
+                "msg2": hops,
+                "min1": _extract_min_from_msg(tmsg),
+            }
+        )
     items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
     items = items[:14]
     return {"city_code": city, "stop_name": stop_name, "node_id": node, "items": items}
