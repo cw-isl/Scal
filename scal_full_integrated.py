@@ -63,7 +63,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 # Search for lines like `# === [SECTION: ...] ===` to navigate.
 
 # === [SECTION: Imports / Standard & Third-party] ==============================
-import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET
+import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET, subprocess, sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple
@@ -464,6 +464,24 @@ def tago_get_arrivals(city_code: str, node_id: str, service_key: str) -> Tuple[s
 
 def fetch_bus():
     cfg = CFG.get("bus", {}) or {}
+    json_path = cfg.get("local_json")
+    if json_path:
+        try:
+            js = json.loads(Path(json_path).read_text("utf-8"))
+            routes = js.get("routes") or []
+            arrivals = js.get("arrivals") or []
+            items = []
+            for i, rt in enumerate(routes):
+                msg1 = arrivals[i] if i < len(arrivals) else ""
+                items.append({"route": rt, "msg1": msg1, "msg2": ""})
+            return {
+                "stop_name": (js.get("meta") or [""])[0],
+                "items": items[:14],
+                "timestamp": js.get("timestamp"),
+            }
+        except Exception:
+            pass
+
     city = cfg.get("city_code", "").strip()
     node = cfg.get("node_id", "").strip()
     key = cfg.get("key", "").strip()
@@ -476,12 +494,14 @@ def fetch_bus():
         rt = parts[0] if len(parts) > 0 else ""
         hops = parts[1] if len(parts) > 1 else ""
         tmsg = parts[2] if len(parts) > 2 else ""
-        items.append({
-            "route": rt,
-            "msg1": tmsg,
-            "msg2": hops,
-            "min1": _extract_min_from_msg(tmsg),
-        })
+        items.append(
+            {
+                "route": rt,
+                "msg1": tmsg,
+                "msg2": hops,
+                "min1": _extract_min_from_msg(tmsg),
+            }
+        )
     items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
     items = items[:14]
     return {"city_code": city, "stop_name": stop_name, "node_id": node, "items": items}
@@ -772,6 +792,177 @@ def run_bus_bot():
     app.add_handler(CallbackQueryHandler(bb_on_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bb_on_message))
     bb_log.info("Bus bot started.")
+    app.run_polling()
+
+
+# === [SECTION: Waydroid KakaoBus automation] ================================
+KBUS_PKG = "com.kakao.bus"
+KBUS_LAUNCH_TRY = 1
+KBUS_OUT = Path("bus.json")
+KBUS_INTERVAL = 10  # seconds
+KBUS_KST = timezone(timedelta(hours=9))
+KBUS_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+KBUS_ALLOWED_IDS = {int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x.strip()}
+
+
+def kbus_sh(*args: str, check: bool = True, text: bool = True):
+    return subprocess.run(args, check=check, text=text, capture_output=True)
+
+
+def kbus_adb(*args: str, check: bool = True):
+    return kbus_sh("adb", *args, check=check)
+
+
+def kbus_set_adb_ime() -> None:
+    kbus_adb("shell", "ime", "enable", "com.android.adbkeyboard/.AdbIME")
+    kbus_adb("shell", "ime", "set", "com.android.adbkeyboard/.AdbIME")
+
+
+def kbus_launch_app() -> None:
+    kbus_adb("shell", "input", "keyevent", "3")
+    time.sleep(0.6)
+    for _ in range(KBUS_LAUNCH_TRY):
+        kbus_adb(
+            "shell",
+            "monkey",
+            "-p",
+            KBUS_PKG,
+            "-c",
+            "android.intent.category.LAUNCHER",
+            "1",
+        )
+        time.sleep(1.2)
+
+
+def kbus_enter_search(query: str) -> None:
+    kbus_adb("shell", "input", "keyevent", "84")
+    time.sleep(0.8)
+    kbus_adb(
+        "shell",
+        "am",
+        "broadcast",
+        "-a",
+        "ADB_INPUT_TEXT",
+        "--es",
+        "msg",
+        query,
+    )
+    time.sleep(0.4)
+    kbus_adb("shell", "input", "keyevent", "66")
+    time.sleep(1.2)
+
+
+def kbus_apply_search(query: str) -> None:
+    kbus_adb("wait-for-device")
+    kbus_set_adb_ime()
+    kbus_launch_app()
+    kbus_enter_search(query)
+    print(f"OK: '{query}' 검색어 적용 완료 (카카오버스 화면 고정 시도)")
+
+
+def kbus_dump_xml(local: Path) -> Path:
+    kbus_adb("shell", "uiautomator", "dump", "/sdcard/view.xml")
+    kbus_adb("pull", "/sdcard/view.xml", str(local))
+    return local
+
+
+def kbus_texts_from(xml_path: Path) -> List[str]:
+    root = ET.parse(xml_path).getroot()
+    res: List[str] = []
+    for node in root.iter():
+        t = node.attrib.get("text")
+        if t:
+            t = " ".join(t.split())
+            if t:
+                res.append(t)
+    return res
+
+
+def kbus_parse_heuristic(texts: List[str]) -> dict:
+    routes, arrivals, meta = [], [], []
+    for t in texts:
+        if ("번" in t and any(c.isdigit() for c in t)) or t.isdigit():
+            routes.append(t)
+        elif any(k in t for k in ("분", "초", "도착", "전", "곧")):
+            arrivals.append(t)
+        elif any(k in t for k in ("정류장", "남음", "방면", "행")):
+            meta.append(t)
+    return {
+        "timestamp": datetime.now(KBUS_KST).isoformat(),
+        "routes": routes[:20],
+        "arrivals": arrivals[:20],
+        "meta": meta[:30],
+        "raw": texts[:200],
+    }
+
+
+def kbus_scrape_loop() -> None:
+    out_dir = KBUS_OUT.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            xml = kbus_dump_xml(out_dir / "view.xml")
+            texts = kbus_texts_from(xml)
+            data = kbus_parse_heuristic(texts)
+            KBUS_OUT.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+            print(f"[{data['timestamp']}] {len(texts)} nodes → {KBUS_OUT}")
+        except Exception as e:
+            print("error:", e)
+        time.sleep(KBUS_INTERVAL)
+
+
+def kbus_allowed(user_id: int) -> bool:
+    return not KBUS_ALLOWED_IDS or user_id in KBUS_ALLOWED_IDS
+
+
+async def kbus_deny(update: Update) -> None:
+    await update.message.reply_text("허용된 사용자만 사용할 수 있습니다.")
+
+
+async def kbus_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    await update.message.reply_text("버스봇입니다. /bus <정류소명 또는 번호> 로 설정하세요.")
+
+
+async def kbus_bus_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    if not context.args:
+        return await update.message.reply_text("사용법: /bus <정류소명 또는 번호>")
+    query = " ".join(context.args)
+    try:
+        kbus_apply_search(query)
+        await update.message.reply_text(f"검색 적용: {query}")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"실패: {e.output}")
+    except Exception as e:
+        await update.message.reply_text(f"오류: {e}")
+
+
+async def kbus_echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not kbus_allowed(update.effective_user.id):
+        return await kbus_deny(update)
+    text = (update.message.text or "").strip()
+    if not text:
+        return
+    try:
+        kbus_apply_search(text)
+        await update.message.reply_text(f"검색 적용: {text}")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"실패: {e.output}")
+    except Exception as e:
+        await update.message.reply_text(f"오류: {e}")
+
+
+def kbus_run_bot() -> None:
+    if not KBUS_BOT_TOKEN:
+        print("TELEGRAM_BOT_TOKEN not set; bot disabled")
+        return
+    app = Application.builder().token(KBUS_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", kbus_start_cmd))
+    app.add_handler(CommandHandler("bus", kbus_bus_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, kbus_echo))
     app.run_polling()
 
 
@@ -1730,6 +1921,7 @@ def save_state(d):
 TB = telebot.TeleBot(CFG["telegram"]["bot_token"]) if CFG["telegram"]["bot_token"] else None
 ALLOWED = set(CFG["telegram"]["allowed_user_ids"])
 def allowed(uid): return uid in ALLOWED if ALLOWED else True
+KBUS_WAIT = set()
 
 # === [SECTION: Inline calendar add flow UI helpers] ==========================
 def month_days(year: int, month: int) -> int:
@@ -1840,8 +2032,25 @@ if TB:
             [telebot.types.InlineKeyboardButton("5) weather (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("6) manage events", callback_data="cal_manage")],
             [telebot.types.InlineKeyboardButton("7) verse", callback_data="set_verse")],
+            [telebot.types.InlineKeyboardButton("8) 카카오버스 검색", callback_data="kbus_search")],
         ])
         TB.send_message(m.chat.id, "Select category:", reply_markup=kb)
+
+    @TB.message_handler(commands=["bus"])
+    def tb_kbus_cmd(m):
+        if not allowed(m.from_user.id):
+            return TB.reply_to(m, "Not authorized.")
+        parts = m.text.split(maxsplit=1)
+        if len(parts) < 2:
+            return TB.reply_to(m, "사용법: /bus <정류소명 또는 번호>")
+        query = parts[1].strip()
+        try:
+            kbus_apply_search(query)
+            TB.reply_to(m, f"검색 적용: {query}")
+        except subprocess.CalledProcessError as e:
+            TB.reply_to(m, f"실패: {e.output}")
+        except Exception as e:
+            TB.reply_to(m, f"오류: {e}")
 
     # /cal merged into /set option 6
     @TB.callback_query_handler(func=lambda c: c.data == "cal_manage")
@@ -1889,6 +2098,31 @@ if TB:
             TB.send_message(c.message.chat.id, "버스 정보 메뉴를 선택하세요:", reply_markup=kb)
         elif c.data == "noop":
             TB.answer_callback_query(c.id, "Coming soon")
+
+    @TB.callback_query_handler(func=lambda c: c.data == "kbus_search")
+    def on_cb_kbus_search(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        KBUS_WAIT.add(c.from_user.id)
+        TB.send_message(c.message.chat.id, "카카오버스 검색어를 입력하세요.")
+
+    @TB.message_handler(func=lambda m: m.from_user.id in KBUS_WAIT, content_types=["text"])
+    def on_kbus_wait(m):
+        if not allowed(m.from_user.id):
+            return
+        query = (m.text or "").strip()
+        if not query:
+            return
+        try:
+            kbus_apply_search(query)
+            TB.reply_to(m, f"검색 적용: {query}")
+        except subprocess.CalledProcessError as e:
+            TB.reply_to(m, f"실패: {e.output}")
+        except Exception as e:
+            TB.reply_to(m, f"오류: {e}")
+        finally:
+            KBUS_WAIT.discard(m.from_user.id)
 
     # ---- Bus settings flow
     @TB.callback_query_handler(func=lambda c: c.data in ("bus_set_stop", "bus_set_key", "bus_show_config", "bus_test"))
@@ -2382,9 +2616,25 @@ def run_web():
         raise
 
 def main():
+    threading.Thread(target=kbus_scrape_loop, daemon=True).start()
     t = threading.Thread(target=run_web, daemon=True); t.start()
     print(f"[WEB] started on :{CFG['server']['port']}  -> /board")
     start_telegram()
 
+
+def kbus_entry(argv: List[str]) -> None:
+    if argv and argv[0] == "search":
+        if len(argv) < 2:
+            print("Usage: kbus search '<정류소명 또는 번호>'")
+            return
+        kbus_apply_search(argv[1])
+        return
+    threading.Thread(target=kbus_scrape_loop, daemon=True).start()
+    kbus_run_bot()
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "kbus":
+        kbus_entry(sys.argv[2:])
+    else:
+        main()
