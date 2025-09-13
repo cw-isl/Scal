@@ -75,6 +75,7 @@ import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory, redirect, url_for, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 import telebot
+from bus_api import get_bus_arrivals
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
@@ -387,21 +388,7 @@ def fetch_air_quality():
     _air_cache.update({"key": key, "loc": loc, "ts": now, "data": data})
     return data
 
-# === [SECTION: Bus (Seoul/Gyeonggi/Incheon) API adapters] ====================
-def _as_int(x, default=None):
-    try:
-        return int(x)
-    except Exception:
-        return default
-
-def _extract_min_from_msg(msg: str):
-    """한국어 도착메시지에서 '분' 또는 '곧 도착' 판단."""
-    if not msg:
-        return None
-    if "곧" in msg:
-        return 0
-    m = re.search(r"(\d+)\s*분", msg)
-    return _as_int(m.group(1)) if m else None
+# === [SECTION: Bus utilities] ================================================
 def _pick_text(elem: Optional[ET.Element], tag: str) -> str:
     if elem is None:
         return ""
@@ -409,102 +396,28 @@ def _pick_text(elem: Optional[ET.Element], tag: str) -> str:
     return html.unescape(child.text) if (child is not None and child.text) else ""
 
 
-def _normalize_arrmsg(msg: str, fallback_seconds: Optional[int]) -> Tuple[str, str]:
-    """메시지에서 'N분', 'N번째 전' 등을 추출"""
-    if not msg and fallback_seconds is None:
-        return ("", "")
-    if fallback_seconds is not None:
-        if fallback_seconds < 120:
-            return ("곧 도착", "1정거장")
-        minutes = fallback_seconds // 60
-        return (f"{minutes}분", "1정거장")
-    m_min = re.search(r"(\d+)\s*분", msg or "")
-    m_hops = re.search(r"(\d+)\s*번째\s*전", msg or "")
-    if m_min and int(m_min.group(1)) < 2:
-        t = "곧 도착"
-    else:
-        t = f"{m_min.group(1)}분" if m_min else ("곧 도착" if "곧 도착" in (msg or "") else (msg or ""))
-    hops = f"{m_hops.group(1)}정거장" if m_hops else ""
-    if not hops or hops == "0정거장":
-        hops = "1정거장"
-    return (t, hops)
-
-
-def tago_get_arrivals(city_code: str, node_id: str, service_key: str) -> Tuple[str, List[str]]:
-    url = (
-        "http://apis.data.go.kr/1613000/BusArrivalService/getBusArrivalList"
-        f"?serviceKey={quote(service_key)}&cityCode={quote(str(city_code))}&nodeId={quote(str(node_id))}"
-    )
-    r = requests.get(url, timeout=7)
-    r.raise_for_status()
-    root = ET.fromstring(r.text)
-    records: List[Tuple[int, str]] = []
-    stop_name = ""
-    for it in root.iter("item"):
-        if not stop_name:
-            stop_name = _pick_text(it, "nodenm") or _pick_text(it, "nodeNm")
-        rtNm = _pick_text(it, "routeno") or _pick_text(it, "routeNo")
-        arr = _pick_text(it, "arrtime") or _pick_text(it, "predictTime1")
-        hops_raw = _pick_text(it, "arrsttnm") or _pick_text(it, "arriveRemainSeatCnt")
-        seconds = int(arr) if arr and arr.isdigit() else None
-        t1, hops = _normalize_arrmsg("", seconds)
-        if hops_raw and hops_raw.isdigit():
-            hops = f"{hops_raw}정거장"
-        if not rtNm:
-            continue
-        line = "\t".join(filter(None, [rtNm, hops, t1]))
-        m = re.search(r"(\d+)", t1)
-        minutes = 0 if t1 == "곧 도착" else (int(m.group(1)) if m else 99999)
-        records.append((minutes, line))
-    records = [r for r in records if r[1].strip()]
-    records.sort(key=lambda x: x[0])
-    lines = [r[1] for r in records]
-    return stop_name, lines
-
-
-def fetch_bus():
+def render_bus_box():
     cfg = CFG.get("bus", {}) or {}
-    json_path = cfg.get("local_json")
-    if json_path:
-        try:
-            js = json.loads(Path(json_path).read_text("utf-8"))
-            routes = js.get("routes") or []
-            arrivals = js.get("arrivals") or []
-            items = []
-            for i, rt in enumerate(routes):
-                msg1 = arrivals[i] if i < len(arrivals) else ""
-                items.append({"route": rt, "msg1": msg1, "msg2": ""})
-            return {
-                "stop_name": (js.get("meta") or [""])[0],
-                "items": items[:14],
-                "timestamp": js.get("timestamp"),
-            }
-        except Exception:
-            pass
+    city = (cfg.get("city_code") or "").strip()
+    node = (cfg.get("node_id") or "").strip()
+    key = (cfg.get("key") or "").strip()
+    data = get_bus_arrivals(city, node, key, dedup_by_route=True, limit=5, timeout=7)
 
-    city = cfg.get("city_code", "").strip()
-    node = cfg.get("node_id", "").strip()
-    key = cfg.get("key", "").strip()
-    if not (city and node and key):
-        return {"need_config": True}
-    stop_name, lines = tago_get_arrivals(city, node, key)
-    items = []
-    for ln in lines:
-        parts = ln.split("\t")
-        rt = parts[0] if len(parts) > 0 else ""
-        hops = parts[1] if len(parts) > 1 else ""
-        tmsg = parts[2] if len(parts) > 2 else ""
-        items.append(
+    if data.get("need_config"):
+        return {"title": "버스도착", "rows": [{"text": "도시/정류장/키를 설정해주세요"}]}
+
+    rows = []
+    for it in data.get("items", []):
+        rows.append(
             {
-                "route": rt,
-                "msg1": tmsg,
-                "msg2": hops,
-                "min1": _extract_min_from_msg(tmsg),
+                "route": it["route"],
+                "eta": it["eta_text"],
+                "hops": it["hops"],
+                "text": f'{it["route"]} · {it["eta_text"]} · {it["hops"]}',
             }
         )
-    items.sort(key=lambda x: x["min1"] if x["min1"] is not None else 9999)
-    items = items[:14]
-    return {"city_code": city, "stop_name": stop_name, "node_id": node, "items": items}
+
+    return {"title": f'버스도착 · {data.get("stop_name", "")}', "rows": rows}
 
 
 # === [SECTION: Standalone Bus Arrival Telegram Bot (PTB)] ====================
@@ -678,7 +591,13 @@ async def bb_cmd_bus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     st = bb_ensure_user_state(update.effective_user.id)
     city, node, key = st["city_code"], st["node_id"], st["key"]
     await update.message.reply_text(f"⏳ 조회 중… (city={city}, node={node})")
-    stop_name, lines = tago_get_arrivals(city, node, key)
+    data = get_bus_arrivals(city, node, key, dedup_by_route=False, limit=20, timeout=7)
+    lines = []
+    stop = data.get("stop_name")
+    if stop:
+        lines.append(stop)
+    for it in data.get("items", []):
+        lines.append(f"{it['route']} {it['eta_text']} {it['hops']}")
     await update.message.reply_text("\n".join(lines) if lines else "정보가 없습니다.")
 
 
@@ -1304,7 +1223,7 @@ def serve_photo(fname):
 @app.get("/api/bus")
 def api_bus():
     try:
-        data = fetch_bus()
+        data = render_bus_box()
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1686,8 +1605,10 @@ async function refreshBus(){
     const r = await fetch('/api/bus');
     if(!r.ok) return;
     const data = await r.json();
+    const titleEl = document.getElementById('bus-title');
+    if(titleEl) titleEl.textContent = data.title || '버스도착';
     const stopEl = document.getElementById('bus-stop');
-    if(stopEl) stopEl.textContent = data.stop_name ? `${data.stop_name} (${data.node_id || ''})` : '';
+    if(stopEl) stopEl.textContent = '';
 
     const left = document.getElementById('bus-left');
     const right = document.getElementById('bus-right');
@@ -1695,22 +1616,27 @@ async function refreshBus(){
 
     left.innerHTML='';
     right.innerHTML='';
-    if(data.need_config){
-      left.textContent = '버스 설정 필요';
+
+    const rows = data.rows || [];
+    if(!rows.length){
+      left.textContent = '정보 없음';
       return;
     }
-    const items = data.items || [];
-    const mid = Math.ceil(items.length/2);
-    items.slice(0, mid).forEach(it=>{
+    if(rows.length===1 && rows[0].text && !rows[0].route){
+      left.textContent = rows[0].text;
+      return;
+    }
+    const mid = Math.ceil(rows.length/2);
+    rows.slice(0, mid).forEach(it=>{
       const row=document.createElement('div');
       row.className='item';
-      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.msg2}</div><div class="msg">${it.msg1}</div>`;
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.hops}</div><div class="msg">${it.eta}</div>`;
       left.appendChild(row);
     });
-    items.slice(mid).forEach(it=>{
+    rows.slice(mid).forEach(it=>{
       const row=document.createElement('div');
       row.className='item';
-      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.msg2}</div><div class="msg">${it.msg1}</div>`;
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.hops}</div><div class="msg">${it.eta}</div>`;
       right.appendChild(row);
     });
   }catch(e){}
@@ -2159,20 +2085,17 @@ if TB:
             TB.send_message(c.message.chat.id, "\n".join(msg))
         elif c.data == "bus_test":
             try:
-                data = fetch_bus()
-                if data.get("need_config"):
-                    TB.send_message(c.message.chat.id, "버스 설정이 부족합니다.")
+                box = render_bus_box()
+                rows = box.get("rows", [])
+                if not rows:
+                    TB.send_message(c.message.chat.id, "(정보 없음)")
                     return
-                lines = [data.get("stop_name", "")]
-                for it in data.get("items", [])[:10]:
-                    parts = [it["route"]]
-                    if it.get("msg2"):
-                        parts.append(it["msg2"])
-                    if it.get("msg1"):
-                        parts.append(it["msg1"])
-                    lines.append("\t".join(parts))
-                if len(lines) == 1:
-                    lines.append("(정보 없음)")
+                if len(rows) == 1 and rows[0].get("text") and not rows[0].get("route"):
+                    TB.send_message(c.message.chat.id, rows[0]["text"])
+                    return
+                lines = [box.get("title", "버스도착")]
+                for it in rows[:10]:
+                    lines.append(it.get("text") or f"{it.get('route')} {it.get('eta')} {it.get('hops')}")
                 TB.send_message(c.message.chat.id, "\n".join(lines))
             except Exception as e:
                 TB.send_message(c.message.chat.id, f"검색 실패: {e}")
