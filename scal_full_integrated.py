@@ -1699,14 +1699,15 @@ BOARD_HTML = r"""
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
     grid-template-areas:
       "verse verse"
       "todo home"
       "bus home"
       "weather weather";
-    gap:12px;
+    gap:16px;
     align-content:start;
+    grid-auto-rows:minmax(0, auto);
   }
 
   .section::after {
@@ -1737,7 +1738,7 @@ BOARD_HTML = r"""
   .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
-  .bus{display:flex; flex-direction:column; gap:10px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:16px 18px; height:100%; min-height:190px; margin-top:8px;}
+  .bus{display:flex; flex-direction:column; gap:10px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:16px 18px; height:100%; min-height:190px;}
   .bus .arrivals{display:flex; flex-direction:column; gap:8px; min-width:0; flex:1 1 auto;}
   .bus .arrivals h3{margin-bottom:0;}
   .bus .stop{font-size:14px; margin-bottom:4px;}
@@ -1748,9 +1749,9 @@ BOARD_HTML = r"""
   .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
   .bus .item .msg{flex:0 0 6ch; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
-  .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:20px 22px; min-height:360px;}
+  .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:20px 22px; min-height:360px; height:100%;}
   .home h3{margin-bottom:6px;}
-  .home .ha-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; flex:1 1 auto; align-content:start;}
+  .home .ha-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:4px;}
   .home .ha-device{display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:center; padding:10px 6px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none;}
   .home .ha-device .icon{font-size:24px;}
   .home .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
