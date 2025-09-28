@@ -1694,12 +1694,13 @@ BOARD_HTML = r"""
 
   .section {
     position:relative;
-    height: calc(var(--H) - var(--top) - var(--cal));
+    min-height: calc(var(--H) - var(--top) - var(--cal));
+    height:auto;
     padding:10px 24px;
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto;
     grid-template-areas:
       "verse verse"
       "todo home"
