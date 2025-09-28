@@ -1699,15 +1699,14 @@ BOARD_HTML = r"""
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-rows: 120px 290px 210px 160px;
     grid-template-areas:
       "verse verse"
       "todo home"
       "bus home"
       "weather weather";
     gap:16px;
-    align-content:start;
-    grid-auto-rows:minmax(0, auto);
+    align-content:stretch;
   }
 
   .section::after {
