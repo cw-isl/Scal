@@ -1658,7 +1658,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --bus:198px; --weather:280px; --todo:270px; } /* bus box reduced 25% */
+          --weather:280px; --layout-left:520px; }
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -1692,21 +1692,40 @@ BOARD_HTML = r"""
         background:rgba(0,0,0,.45); border-radius:6px; padding:2px 6px;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-  .section { height: calc(var(--H) - var(--top) - var(--cal)); padding:10px 24px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; }
+  .section {
+    height: calc(var(--H) - var(--top) - var(--cal));
+    padding:10px 24px;
+    box-sizing:border-box;
+    display:grid;
+    grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-areas:
+      "verse verse"
+      "todo home"
+      "bus home"
+      "weather weather";
+    gap:12px;
+    align-content:start;
+  }
+
+  .section .verse { grid-area: verse; }
+  .section .todo { grid-area: todo; }
+  .section .bus { grid-area: bus; }
+  .section .home { grid-area: home; }
+  .section .weather { grid-area: weather; }
 
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-.todo{ flex:0 0 var(--todo); display:flex; flex-direction:column;}
+.todo{ display:flex; flex-direction:column;}
   .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
   .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
   .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
-  .bus{flex:0 0 var(--bus); display:flex; flex-direction:column;}
-  .bus .split{display:flex; gap:16px; flex:1 1 auto; align-items:stretch;}
-  .bus .arrivals{flex:1 1 0; display:flex; flex-direction:column; background:rgba(0,0,0,.28); border-radius:12px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); min-width:0;}
+  .bus{display:flex; flex-direction:column; padding:0; background:transparent; border:none;}
+  .bus .arrivals{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border-radius:12px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); min-width:0;}
   .bus .arrivals h3{margin-bottom:6px;}
   .bus .stop{font-size:14px; margin-bottom:4px;}
   .bus .rows{display:flex; gap:10px; overflow:hidden;}
@@ -1716,20 +1735,20 @@ BOARD_HTML = r"""
   .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
   .bus .item .msg{flex:0 0 6ch; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
-  .bus .ha-panel{flex:2 1 0; display:flex; flex-direction:column; background:rgba(0,0,0,.28); border-radius:12px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); min-width:0;}
-  .bus .ha-panel h3{margin-bottom:6px;}
-  .bus .ha-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; flex:1 1 auto; align-content:start;}
-  .bus .ha-device{display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:center; padding:10px 6px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none;}
-  .bus .ha-device .icon{font-size:24px;}
-  .bus .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
-  .bus .ha-device .state{font-size:12px; opacity:.85;}
-  .bus .ha-device.on{background:rgba(255,255,255,.18); border-color:#58ff93; box-shadow:0 0 18px rgba(88,255,147,.45);}
-  .bus .ha-device.offline{opacity:.55; border-style:dashed; border-color:rgba(255,255,255,.25); cursor:default;}
-  .bus .ha-device.disabled{cursor:default; opacity:.7;}
-  .bus .ha-device.pending{pointer-events:none; opacity:.65;}
-  .bus .ha-device.offline .state{color:#ffb4b4;}
-  .bus .ha-status{grid-column:1 / -1; padding:10px; border-radius:10px; background:rgba(0,0,0,.28); font-size:13px; text-align:center; line-height:1.3;}
-  .bus .ha-device:active{transform:scale(.97);}
+  .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:12px 14px; min-height:0;}
+  .home h3{margin-bottom:6px;}
+  .home .ha-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; flex:1 1 auto; align-content:start;}
+  .home .ha-device{display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:center; padding:10px 6px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none;}
+  .home .ha-device .icon{font-size:24px;}
+  .home .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
+  .home .ha-device .state{font-size:12px; opacity:.85;}
+  .home .ha-device.on{background:rgba(255,255,255,.18); border-color:#58ff93; box-shadow:0 0 18px rgba(88,255,147,.45);}
+  .home .ha-device.offline{opacity:.55; border-style:dashed; border-color:rgba(255,255,255,.25); cursor:default;}
+  .home .ha-device.disabled{cursor:default; opacity:.7;}
+  .home .ha-device.pending{pointer-events:none; opacity:.65;}
+  .home .ha-device.offline .state{color:#ffb4b4;}
+  .home .ha-status{grid-column:1 / -1; padding:10px; border-radius:10px; background:rgba(0,0,0,.28); font-size:13px; text-align:center; line-height:1.3;}
+  .home .ha-device:active{transform:scale(.97);}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
@@ -1821,19 +1840,17 @@ BOARD_HTML = r"""
         <div class="col" id="todo-col-2"></div>
       </div>
     </div>
+    <div class="home blk">
+      <h3>Home Control</h3>
+      <div class="ha-grid" id="ha-grid"></div>
+    </div>
     <div class="bus blk">
-      <div class="split">
-        <div class="arrivals">
-          <h3 id="bus-title">BUS Info</h3>
-          <div class="stop" id="bus-stop"></div>
-          <div class="rows" id="businfo">
-            <div class="col" id="bus-left"></div>
-            <div class="col" id="bus-right"></div>
-          </div>
-        </div>
-        <div class="ha-panel">
-          <h3>Home Control</h3>
-          <div class="ha-grid" id="ha-grid"></div>
+      <div class="arrivals">
+        <h3 id="bus-title">BUS Info</h3>
+        <div class="stop" id="bus-stop"></div>
+        <div class="rows" id="businfo">
+          <div class="col" id="bus-left"></div>
+          <div class="col" id="bus-right"></div>
         </div>
       </div>
     </div>
