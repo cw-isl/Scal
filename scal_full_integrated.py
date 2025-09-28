@@ -30,7 +30,7 @@ EMBEDDED_CONFIG = r"""{
     }
   },
   "google_home": {
-    "agent_user_id": "mangkoog@gmail.com",
+    "agent_user_id": "homecontrol@sheet-maker-471601.iam.gserviceaccount.com",
     "service_account_file": "/root/scal/google_home_service_account.json"
   },
   "todoist": {
