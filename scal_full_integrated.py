@@ -30,8 +30,8 @@ EMBEDDED_CONFIG = r"""{
     }
   },
   "google_home": {
-    "agent_user_id": "",
-    "service_account_file": "google_home_service_account.json"
+    "agent_user_id": "mangkoog@gmail.com",
+    "service_account_file": "/root/scal/google_home_service_account.json"
   },
   "todoist": {
     "api_token": "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b",
