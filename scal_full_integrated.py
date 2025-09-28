@@ -29,6 +29,10 @@ EMBEDDED_CONFIG = r"""{
       "id": "bob.gondrae@gmail.com"
     }
   },
+  "google_home": {
+    "agent_user_id": "",
+    "service_account_file": "google_home_service_account.json"
+  },
   "todoist": {
     "api_token": "0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b",
     "max_items": 20
@@ -156,6 +160,13 @@ try:
 except Exception:
     GOOGLE_OK = False
 
+try:
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import AuthorizedSession
+    GOOGLE_HOME_LIB_OK = True
+except Exception:
+    GOOGLE_HOME_LIB_OK = False
+
 # === [SECTION: Paths / Base config file locations] ===========================
 BASE = Path("/root/scal")
 STATE_PATH = BASE / "sframe_state.json"
@@ -187,6 +198,10 @@ DEFAULT_CFG = {
         "calendar": {"id": "primary"}
 
 },
+    "google_home": {
+        "agent_user_id": "",
+        "service_account_file": "google_home_service_account.json"
+    },
     # Todoist (config에서 설정) — 여기 값은 기본값
     "todoist": {
         "api_token": "",                   # 설정에 넣은 토큰 사용; 비어있으면 비활성
@@ -551,6 +566,240 @@ def render_bus_box():
         title += f" · {stop_name}"
 
     return {"title": title, "stop": stop_name, "rows": rows}
+
+
+# === [SECTION: Google Home (Home Graph API helpers)] ==========================
+HOMEGRAPH_SCOPE = "https://www.googleapis.com/auth/homegraph"
+HOMEGRAPH_BASE = "https://homegraph.googleapis.com/v1"
+
+DEVICE_TYPE_ICONS = {
+    "action.devices.types.LIGHT": "💡",
+    "action.devices.types.SWITCH": "🔌",
+    "action.devices.types.OUTLET": "🔌",
+    "action.devices.types.AC_UNIT": "❄️",
+    "action.devices.types.AIRPURIFIER": "🌬️",
+    "action.devices.types.FAN": "🌀",
+    "action.devices.types.VACUUM": "🤖",
+    "action.devices.types.SPEAKER": "🔊",
+    "action.devices.types.DISPLAY": "🖥️",
+    "action.devices.types.TV": "📺",
+    "action.devices.types.THERMOSTAT": "🌡️",
+    "action.devices.types.COFFEEMAKER": "☕",
+    "action.devices.types.KETTLE": "☕",
+    "action.devices.types.WASHER": "🧺",
+    "action.devices.types.DRYER": "🧺",
+}
+
+
+class GoogleHomeError(RuntimeError):
+    """Base exception for Google Home helper errors."""
+
+
+class GoogleHomeConfigError(GoogleHomeError):
+    """Raised when configuration is incomplete."""
+
+
+class GoogleHomeAPIError(GoogleHomeError):
+    """Raised when Home Graph API responds with an error."""
+
+
+def _google_home_cfg() -> Dict[str, Any]:
+    return CFG.get("google_home", {}) or {}
+
+
+def _resolve_service_account_path(path_value: str) -> Path:
+    p = Path(path_value)
+    if not p.is_absolute():
+        p = BASE / p
+    return p
+
+
+def _homegraph_session() -> Tuple[AuthorizedSession, str]:
+    if not GOOGLE_HOME_LIB_OK:
+        raise GoogleHomeConfigError("google-auth 라이브러리가 설치되어 있지 않습니다.")
+
+    cfg = _google_home_cfg()
+    agent_user_id = (cfg.get("agent_user_id") or "").strip()
+    if not agent_user_id:
+        raise GoogleHomeConfigError("google_home.agent_user_id 설정이 필요합니다.")
+
+    sa_path_value = (cfg.get("service_account_file") or "").strip()
+    if not sa_path_value:
+        raise GoogleHomeConfigError("google_home.service_account_file 설정이 필요합니다.")
+
+    sa_path = _resolve_service_account_path(sa_path_value)
+    if not sa_path.exists():
+        raise GoogleHomeConfigError(f"서비스 계정 JSON 파일을 찾을 수 없습니다: {sa_path}")
+
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            str(sa_path), scopes=[HOMEGRAPH_SCOPE]
+        )
+    except Exception as e:  # pragma: no cover - depends on runtime env
+        raise GoogleHomeConfigError(f"서비스 계정 로드 실패: {e}")
+
+    session = AuthorizedSession(creds)
+    return session, agent_user_id
+
+
+def _homegraph_post(session: AuthorizedSession, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{HOMEGRAPH_BASE}/{endpoint}"
+    try:
+        resp = session.post(url, json=payload, timeout=10)
+    except Exception as e:
+        raise GoogleHomeAPIError(f"Home Graph 요청 실패: {e}")
+
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+            message = detail.get("error", {}).get("message") if isinstance(detail, dict) else None
+        except Exception:
+            detail = resp.text
+            message = None
+        err_text = message or detail or f"HTTP {resp.status_code}"
+        raise GoogleHomeAPIError(f"{endpoint} 호출 오류: {err_text}")
+
+    try:
+        return resp.json()
+    except Exception as e:
+        raise GoogleHomeAPIError(f"응답 JSON 파싱 실패: {e}")
+
+
+def _pick_device_icon(device_type: str) -> str:
+    return DEVICE_TYPE_ICONS.get(device_type, "🔘")
+
+
+def _format_device(raw: Dict[str, Any], state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    state = state or {}
+    trait_list = raw.get("traits") or []
+    name_info = raw.get("name") or {}
+    nicknames = raw.get("nicknames") or []
+    dev_id = raw.get("id") or ""
+    display_name = (name_info.get("name") or (nicknames[0] if nicknames else "")).strip() or dev_id
+    room = (name_info.get("roomHint") or "").strip()
+    device_type = raw.get("type") or ""
+    icon = _pick_device_icon(device_type)
+
+    online = state.get("online")
+    if online is None:
+        online = True
+    online = bool(online)
+
+    on_state = state.get("on")
+    can_toggle = "action.devices.traits.OnOff" in trait_list
+
+    if not online:
+        state_label = "오프라인"
+    elif can_toggle and isinstance(on_state, bool):
+        state_label = "켜짐" if on_state else "꺼짐"
+    elif can_toggle:
+        state_label = "상태 미확인"
+    else:
+        status_text = state.get("status") if isinstance(state.get("status"), str) else ""
+        state_label = status_text or "상태 확인 불가"
+
+    return {
+        "id": dev_id,
+        "name": display_name,
+        "room": room,
+        "type": device_type,
+        "icon": icon,
+        "online": online,
+        "can_toggle": can_toggle,
+        "traits": trait_list,
+        "state": {"on": bool(on_state) if isinstance(on_state, bool) else None},
+        "state_label": state_label,
+    }
+
+
+def google_home_list_devices() -> List[Dict[str, Any]]:
+    session, agent_user_id = _homegraph_session()
+    try:
+        sync_data = _homegraph_post(session, "devices:sync", {"agentUserId": agent_user_id})
+        raw_devices = sync_data.get("devices") or []
+        device_ids = [d.get("id") for d in raw_devices if d.get("id")]
+        state_payload: Dict[str, Any] = {}
+        if device_ids:
+            query_payload = {
+                "agentUserId": agent_user_id,
+                "inputs": [
+                    {
+                        "payload": {
+                            "devices": [{"id": did} for did in device_ids],
+                        }
+                    }
+                ],
+            }
+            query_data = _homegraph_post(session, "devices:query", query_payload)
+            state_payload = (query_data.get("payload") or {}).get("devices", {}) or {}
+        devices = [_format_device(dev, state_payload.get(dev.get("id"))) for dev in raw_devices]
+        devices.sort(key=lambda d: ((d.get("room") or ""), d.get("name") or d.get("id") or ""))
+        return devices
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "on", "yes", "y"}:
+            return True
+        if lowered in {"0", "false", "off", "no", "n"}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    raise ValueError("불리언으로 변환할 수 없는 값입니다.")
+
+
+def google_home_execute_onoff(device_id: str, turn_on: bool) -> Dict[str, Any]:
+    if not device_id:
+        raise GoogleHomeAPIError("기기 ID가 비어 있습니다.")
+
+    session, agent_user_id = _homegraph_session()
+    payload = {
+        "agentUserId": agent_user_id,
+        "requestId": f"frame-{secrets.token_hex(6)}",
+        "inputs": [
+            {
+                "intent": "action.devices.EXECUTE",
+                "payload": {
+                    "commands": [
+                        {
+                            "devices": [{"id": device_id}],
+                            "execution": [
+                                {
+                                    "command": "action.devices.commands.OnOff",
+                                    "params": {"on": bool(turn_on)},
+                                }
+                            ],
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    try:
+        data = _homegraph_post(session, "devices:execute", payload)
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+    commands = (data.get("payload") or {}).get("commands", [])
+    for cmd in commands:
+        status = (cmd.get("status") or "").upper()
+        if status and status not in {"SUCCESS", "PENDING"}:
+            raise GoogleHomeAPIError(f"기기 제어 실패: {status}")
+        error_code = cmd.get("errorCode")
+        if error_code:
+            raise GoogleHomeAPIError(f"기기 제어 오류: {error_code}")
+    return data
 
 
 # === [SECTION: Standalone Bus Arrival Telegram Bot (PTB)] ====================
@@ -1362,6 +1611,43 @@ def api_bus():
         return jsonify({"error": str(e)}), 500
 
 
+@app.get("/api/home-devices")
+def api_home_devices():
+    try:
+        devices = google_home_list_devices()
+        resp: Dict[str, Any] = {"devices": devices}
+        if not devices:
+            resp["message"] = "Google Home에서 동기화된 기기가 없습니다."
+        return jsonify(resp)
+    except GoogleHomeConfigError as e:
+        return jsonify({"need_config": True, "message": str(e)})
+    except GoogleHomeAPIError as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/home-devices/<device_id>/execute")
+def api_home_devices_execute(device_id: str):
+    payload = request.get_json(silent=True) or {}
+    if "on" not in payload:
+        return jsonify({"error": "'on' 값을 전달해야 합니다."}), 400
+    try:
+        desired = _coerce_bool(payload.get("on"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    try:
+        google_home_execute_onoff(device_id, desired)
+        return jsonify({"success": True})
+    except GoogleHomeConfigError as e:
+        return jsonify({"error": str(e)}), 400
+    except GoogleHomeAPIError as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # === [SECTION: Board HTML (legacy UI; monthly calendar + photo fade)] ========
 BOARD_HTML = r"""
 <!doctype html>
@@ -1438,6 +1724,11 @@ BOARD_HTML = r"""
   .bus .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
   .bus .ha-device .state{font-size:12px; opacity:.85;}
   .bus .ha-device.on{background:rgba(255,255,255,.18); border-color:#58ff93; box-shadow:0 0 18px rgba(88,255,147,.45);}
+  .bus .ha-device.offline{opacity:.55; border-style:dashed; border-color:rgba(255,255,255,.25); cursor:default;}
+  .bus .ha-device.disabled{cursor:default; opacity:.7;}
+  .bus .ha-device.pending{pointer-events:none; opacity:.65;}
+  .bus .ha-device.offline .state{color:#ffb4b4;}
+  .bus .ha-status{grid-column:1 / -1; padding:10px; border-radius:10px; background:rgba(0,0,0,.28); font-size:13px; text-align:center; line-height:1.3;}
   .bus .ha-device:active{transform:scale(.97);}
 
   /* Verse block */
@@ -1754,47 +2045,60 @@ async function loadTodo(){
 }
 loadTodo(); setInterval(loadTodo, 20*1000);
 
-// ===== Home Assistant 제어 패널 (프론트엔드 목업) =====
-const HA_STORAGE_KEY = 'ha-device-state';
-const haDevices = [
-  { id: 'light_living', name: '거실등', icon: '💡', state: 'off' },
-  { id: 'air_purifier', name: '공기청정기', icon: '🌬️', state: 'on' },
-  { id: 'robot_vac', name: '로봇청소기', icon: '🤖', state: 'off' },
-  { id: 'ac_master', name: '에어컨', icon: '❄️', state: 'off' }
-];
-
-function restoreHAState(){
-  try{
-    const saved = JSON.parse(localStorage.getItem(HA_STORAGE_KEY) || '{}');
-    haDevices.forEach(dev => {
-      if(saved[dev.id]) dev.state = saved[dev.id];
-    });
-  }catch(e){ /* ignore */ }
-}
-
-function saveHAState(){
-  try{
-    const map = {};
-    haDevices.forEach(dev => { map[dev.id] = dev.state; });
-    localStorage.setItem(HA_STORAGE_KEY, JSON.stringify(map));
-  }catch(e){ /* ignore */ }
-}
-
-function toggleHADevice(dev){
-  dev.state = (dev.state === 'on') ? 'off' : 'on';
-  // TODO: Home Assistant API에 연동할 경우 이 지점에서 fetch 호출 등을 수행
-  renderHomeControls();
-  saveHAState();
-}
+// ===== Google Home 제어 패널 (Home Graph 연동) =====
+let haDevices = [];
+const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'' };
 
 function renderHomeControls(){
   const grid = document.getElementById('ha-grid');
   if(!grid) return;
   grid.innerHTML = '';
+
+  const statuses = [];
+  if(haDevicesState.loading){
+    statuses.push('Google Home 기기 정보를 불러오는 중…');
+  }
+  if(haDevicesState.needConfig){
+    statuses.push(haDevicesState.message || 'Google Home 연동 설정이 필요합니다.');
+  }
+  if(haDevicesState.fetchError){
+    statuses.push('불러오기 오류: ' + haDevicesState.fetchError);
+  }
+  if(haDevicesState.commandError){
+    statuses.push('명령 실패: ' + haDevicesState.commandError);
+  }
+  if(!haDevicesState.needConfig && !haDevicesState.fetchError && haDevicesState.message){
+    statuses.push(haDevicesState.message);
+  }
+  if(!haDevicesState.loading && !haDevicesState.needConfig && !haDevicesState.fetchError && haDevices.length === 0){
+    statuses.push('표시할 기기가 없습니다.');
+  }
+
+  statuses.filter(Boolean).forEach(text => {
+    const msg = document.createElement('div');
+    msg.className = 'ha-status';
+    msg.textContent = text;
+    grid.appendChild(msg);
+  });
+
+  if(haDevicesState.needConfig){
+    return;
+  }
+  if(haDevicesState.fetchError && haDevices.length === 0){
+    return;
+  }
+
   haDevices.forEach(dev => {
     const item = document.createElement('div');
-    item.className = 'ha-device' + (dev.state === 'on' ? ' on' : '');
-    item.dataset.id = dev.id;
+    const isOn = dev.state && dev.state.on === true;
+    const isOnline = dev.online !== false;
+    const canToggle = dev.can_toggle === true && isOnline;
+    const isPending = dev.pending === true;
+    item.className = 'ha-device' + (isOn ? ' on' : '');
+    if(!isOnline) item.className += ' offline';
+    if(!canToggle) item.className += ' disabled';
+    if(isPending) item.className += ' pending';
+    item.dataset.id = dev.id || '';
 
     const icon = document.createElement('div');
     icon.className = 'icon';
@@ -1802,24 +2106,88 @@ function renderHomeControls(){
 
     const name = document.createElement('div');
     name.className = 'name';
-    name.textContent = dev.name;
+    const room = dev.room ? ` · ${dev.room}` : '';
+    name.textContent = (dev.name || dev.id || '기기') + room;
 
     const state = document.createElement('div');
     state.className = 'state';
-    state.textContent = dev.state === 'on' ? '켜짐' : '꺼짐';
+    state.textContent = isPending ? '동작 중…' : (dev.state_label || (isOn ? '켜짐' : '꺼짐'));
 
     item.appendChild(icon);
     item.appendChild(name);
     item.appendChild(state);
 
-    item.addEventListener('click', () => toggleHADevice(dev));
+    if(canToggle){
+      item.addEventListener('click', () => toggleHADevice(dev));
+    }
 
     grid.appendChild(item);
   });
 }
 
-restoreHAState();
-renderHomeControls();
+async function loadHomeDevices(){
+  haDevicesState.loading = true;
+  haDevicesState.fetchError = '';
+  haDevicesState.message = '';
+  renderHomeControls();
+  try{
+    const r = await fetch('/api/home-devices');
+    if(!r.ok){
+      throw new Error('HTTP ' + r.status);
+    }
+    const data = await r.json();
+    if(data.need_config){
+      haDevices = [];
+      haDevicesState.needConfig = true;
+      haDevicesState.message = data.message || 'Google Home 연동을 설정하세요.';
+      return;
+    }
+    haDevicesState.needConfig = false;
+    haDevicesState.commandError = '';
+    if(data.error){
+      throw new Error(data.error);
+    }
+    haDevices = Array.isArray(data.devices) ? data.devices : [];
+    if(data.message){
+      haDevicesState.message = data.message;
+    }
+  }catch(e){
+    haDevices = [];
+    haDevicesState.fetchError = (e && e.message) ? e.message : '알 수 없는 오류';
+  }finally{
+    haDevicesState.loading = false;
+    renderHomeControls();
+  }
+}
+
+async function toggleHADevice(dev){
+  if(!dev || dev.pending || dev.can_toggle !== true || dev.online === false){
+    return;
+  }
+  dev.pending = true;
+  renderHomeControls();
+  try{
+    const desired = !(dev.state && dev.state.on === true);
+    const r = await fetch(`/api/home-devices/${encodeURIComponent(dev.id)}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: desired })
+    });
+    if(!r.ok){
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.error || ('HTTP ' + r.status));
+    }
+    haDevicesState.commandError = '';
+  }catch(e){
+    haDevicesState.commandError = (e && e.message) ? e.message : '실행 실패';
+  }finally{
+    dev.pending = false;
+    await loadHomeDevices();
+  }
+}
+
+loadHomeDevices();
+setInterval(loadHomeDevices, 30*1000);
 
 async function refreshBus(){
   try{
