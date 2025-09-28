@@ -528,7 +528,11 @@ def render_bus_box():
     data = get_bus_arrivals(city, node, key, dedup_by_route=True, limit=5, timeout=7)
 
     if data.get("need_config"):
-        return {"title": "버스도착", "rows": [{"text": "도시/정류장/키를 설정해주세요"}]}
+        return {
+            "title": "버스도착",
+            "stop": "설정 필요",
+            "rows": [{"text": "도시/정류장/키를 설정해주세요"}],
+        }
 
     rows = []
     for it in data.get("items", []):
@@ -541,7 +545,12 @@ def render_bus_box():
             }
         )
 
-    return {"title": f'버스도착 · {data.get("stop_name", "")}', "rows": rows}
+    stop_name = data.get("stop_name", "")
+    title = "버스도착"
+    if stop_name:
+        title += f" · {stop_name}"
+
+    return {"title": title, "stop": stop_name, "rows": rows}
 
 
 # === [SECTION: Standalone Bus Arrival Telegram Bot (PTB)] ====================
@@ -1410,6 +1419,9 @@ BOARD_HTML = r"""
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
   .bus{flex:0 0 var(--bus); display:flex; flex-direction:column;}
+  .bus .split{display:flex; gap:14px; flex:1 1 auto;}
+  .bus .arrivals{flex:1 1 55%; display:flex; flex-direction:column;}
+  .bus .arrivals h3{margin-bottom:6px;}
   .bus .stop{font-size:14px; margin-bottom:4px;}
   .bus .rows{display:flex; gap:10px; overflow:hidden;}
   .bus .col{flex:1 1 50%; display:flex; flex-direction:column; gap:6px;}
@@ -1417,6 +1429,16 @@ BOARD_HTML = r"""
   .bus .item .rt{font-weight:700; width:8ch; white-space:nowrap;}
   .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
   .bus .item .msg{flex:0 0 6ch; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  .bus .ha-panel{flex:1 1 45%; display:flex; flex-direction:column;}
+  .bus .ha-panel h3{margin-bottom:6px;}
+  .bus .ha-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:10px; flex:1 1 auto; align-content:start;}
+  .bus .ha-device{display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; padding:12px 8px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, transform .2s; cursor:pointer; user-select:none;}
+  .bus .ha-device .icon{font-size:30px;}
+  .bus .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
+  .bus .ha-device .state{font-size:12px; opacity:.85;}
+  .bus .ha-device.on{background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.28); box-shadow:0 0 14px rgba(255,255,255,.15);}
+  .bus .ha-device:active{transform:scale(.97);}
 
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
@@ -1509,11 +1531,19 @@ BOARD_HTML = r"""
       </div>
     </div>
     <div class="bus blk">
-      <h3 id="bus-title">BUS Info</h3>
-      <div class="stop" id="bus-stop"></div>
-      <div class="rows" id="businfo">
-        <div class="col" id="bus-left"></div>
-        <div class="col" id="bus-right"></div>
+      <div class="split">
+        <div class="arrivals">
+          <h3 id="bus-title">BUS Info</h3>
+          <div class="stop" id="bus-stop"></div>
+          <div class="rows" id="businfo">
+            <div class="col" id="bus-left"></div>
+            <div class="col" id="bus-right"></div>
+          </div>
+        </div>
+        <div class="ha-panel">
+          <h3>Home Control</h3>
+          <div class="ha-grid" id="ha-grid"></div>
+        </div>
       </div>
     </div>
     <div class="weather blk" id="weather"></div>
@@ -1724,6 +1754,73 @@ async function loadTodo(){
 }
 loadTodo(); setInterval(loadTodo, 20*1000);
 
+// ===== Home Assistant 제어 패널 (프론트엔드 목업) =====
+const HA_STORAGE_KEY = 'ha-device-state';
+const haDevices = [
+  { id: 'light_living', name: '거실등', icon: '💡', state: 'off' },
+  { id: 'air_purifier', name: '공기청정기', icon: '🌬️', state: 'on' },
+  { id: 'robot_vac', name: '로봇청소기', icon: '🤖', state: 'off' },
+  { id: 'ac_master', name: '에어컨', icon: '❄️', state: 'off' }
+];
+
+function restoreHAState(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(HA_STORAGE_KEY) || '{}');
+    haDevices.forEach(dev => {
+      if(saved[dev.id]) dev.state = saved[dev.id];
+    });
+  }catch(e){ /* ignore */ }
+}
+
+function saveHAState(){
+  try{
+    const map = {};
+    haDevices.forEach(dev => { map[dev.id] = dev.state; });
+    localStorage.setItem(HA_STORAGE_KEY, JSON.stringify(map));
+  }catch(e){ /* ignore */ }
+}
+
+function toggleHADevice(dev){
+  dev.state = (dev.state === 'on') ? 'off' : 'on';
+  // TODO: Home Assistant API에 연동할 경우 이 지점에서 fetch 호출 등을 수행
+  renderHomeControls();
+  saveHAState();
+}
+
+function renderHomeControls(){
+  const grid = document.getElementById('ha-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  haDevices.forEach(dev => {
+    const item = document.createElement('div');
+    item.className = 'ha-device' + (dev.state === 'on' ? ' on' : '');
+    item.dataset.id = dev.id;
+
+    const icon = document.createElement('div');
+    icon.className = 'icon';
+    icon.textContent = dev.icon || '🔘';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = dev.name;
+
+    const state = document.createElement('div');
+    state.className = 'state';
+    state.textContent = dev.state === 'on' ? '켜짐' : '꺼짐';
+
+    item.appendChild(icon);
+    item.appendChild(name);
+    item.appendChild(state);
+
+    item.addEventListener('click', () => toggleHADevice(dev));
+
+    grid.appendChild(item);
+  });
+}
+
+restoreHAState();
+renderHomeControls();
+
 async function refreshBus(){
   try{
     const r = await fetch('/api/bus');
@@ -1732,7 +1829,7 @@ async function refreshBus(){
     const titleEl = document.getElementById('bus-title');
     if(titleEl) titleEl.textContent = data.title || '버스도착';
     const stopEl = document.getElementById('bus-stop');
-    if(stopEl) stopEl.textContent = '';
+    if(stopEl) stopEl.textContent = data.stop || '';
 
     const left = document.getElementById('bus-left');
     const right = document.getElementById('bus-right');
