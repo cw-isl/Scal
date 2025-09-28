@@ -1698,7 +1698,7 @@ BOARD_HTML = r"""
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto minmax(0, 2fr) minmax(0, 1fr) auto;
     grid-template-areas:
       "verse verse"
       "todo home"
@@ -1717,15 +1717,15 @@ BOARD_HTML = r"""
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-.todo{ display:flex; flex-direction:column;}
-  .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+.todo{ display:flex; flex-direction:column; height:100%; }
+  .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; flex:1 1 auto; }
   .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
   .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
 
-  .bus{display:flex; flex-direction:column; padding:0; background:transparent; border:none;}
-  .bus .arrivals{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border-radius:12px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); min-width:0;}
+  .bus{display:flex; flex-direction:column; padding:0; background:transparent; border:none; height:100%;}
+  .bus .arrivals{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border-radius:12px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); min-width:0; flex:1 1 auto;}
   .bus .arrivals h3{margin-bottom:6px;}
   .bus .stop{font-size:14px; margin-bottom:4px;}
   .bus .rows{display:flex; gap:10px; overflow:hidden;}
