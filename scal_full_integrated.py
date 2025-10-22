@@ -1677,7 +1677,8 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --weather:280px; --layout-left:420px; --section-gap:20px; }
+          --weather:280px; --layout-left:420px; --section-gap:20px;
+          --section-card-gap:calc(var(--section-gap) - 4px); }
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -1725,22 +1726,22 @@ BOARD_HTML = r"""
   .section-upper {
     display:grid;
     grid-template-columns:minmax(0, var(--layout-left)) minmax(0, 1fr);
-    gap:var(--section-gap);
+    gap:var(--section-card-gap);
     align-items:stretch;
   }
 
   .section-left {
     display:flex;
     flex-direction:column;
-    gap:var(--section-gap);
+    gap:var(--section-card-gap);
   }
 
   .section-right {
     display:flex;
     flex-direction:column;
-    gap:var(--section-gap);
-    border-left:1px solid rgba(255,255,255,.3);
-    padding-left:calc(var(--section-gap) - 4px);
+    gap:var(--section-card-gap);
+    border-left:none;
+    padding-left:0;
   }
 
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
