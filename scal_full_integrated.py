@@ -1662,7 +1662,7 @@ BOARD_HTML = r"""
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
-  .frame { width:var(--W); height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
+  .frame { width:var(--W); min-height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
 
   /* Background photo crossfade */
   .bg, .bg2 {
@@ -1676,7 +1676,7 @@ BOARD_HTML = r"""
   .time { font-size:38px; font-weight:700; letter-spacing:1px; text-shadow:0 0 6px rgba(0,0,0,.65);}
   .date { font-size:22px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-  .cal { height:var(--cal); padding:8px 20px var(--section-gap); box-sizing:border-box; display:flex; flex-direction:column; }
+  .cal { height:auto; min-height:var(--cal); padding:8px 20px calc(var(--section-gap)/2); box-sizing:border-box; display:flex; flex-direction:column; }
   .cal h2 { margin:0 0 8px 0; font-size:22px; opacity:.95; display:flex; align-items:center; gap:8px; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
   .grid { flex:1 1 auto; display:grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap:6px; }
@@ -1694,9 +1694,9 @@ BOARD_HTML = r"""
 
   .section {
     position:relative;
-    min-height: calc(var(--H) - var(--top) - var(--cal));
+    min-height:auto;
     height:auto;
-    padding:var(--section-gap) 24px;
+    padding:calc(var(--section-gap)/2) 24px var(--section-gap);
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
@@ -1705,6 +1705,7 @@ BOARD_HTML = r"""
       "todo home"
       "bus home"
       "weather weather";
+    grid-template-rows:auto auto auto auto;
     gap:var(--section-gap);
     align-content:stretch;
   }
@@ -1768,11 +1769,12 @@ BOARD_HTML = r"""
   .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
 
 /* Weather layout (card style 5-day forecast) */
-.weather {
-  display:flex;
-  gap:12px;
-  align-items:flex-start;
-}
+  .weather {
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding:14px 16px;
+  }
 .weather .w-now {
   display:flex;
   align-items:center;
@@ -1781,42 +1783,42 @@ BOARD_HTML = r"""
 }
 .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
 
-.weather .w-days {
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:10px;
-  width:100%;
-  align-items:stretch;
-  flex:1 1 auto;
-}
-.weather .w-day {
-  text-align:center;
-  background:rgba(0,0,0,.25);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:12px;
-  padding:8px 6px;
-  min-width:0;
-}
+  .weather .w-days {
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:8px;
+    width:100%;
+    align-items:stretch;
+    flex:1 1 auto;
+  }
+  .weather .w-day {
+    text-align:center;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:6px 4px;
+    min-width:0;
+  }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
-.weather .w-day img { width:58px; height:58px; display:block; margin:4px auto; }
+.weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
 .weather .w-day .temps { display:flex; justify-content:center; gap:6px; font-size:14px; margin-top:2px; }
 .weather .w-day .hi { font-weight:800; font-size:16px; }
 .weather .w-day .lo { opacity:.75; font-size:14px; }
 
 /* ▼ AQI card on the right */
-.weather .w-aqi {
-  width:140px;
-  text-align:center;
-  background:rgba(0,0,0,.25);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:12px;
-  padding:12px 8px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  gap:4px;
-  margin-left:auto;
-}
+  .weather .w-aqi {
+    width:130px;
+    text-align:center;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:10px 6px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:4px;
+    margin-left:auto;
+  }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
 .weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
 .weather .w-aqi .lbl { font-size:14px; opacity:.9; }
