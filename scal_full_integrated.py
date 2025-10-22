@@ -306,7 +306,16 @@ def _owm_fetch_onecall(lat, lon, key, units):
     def icon_url(code): return f"https://openweathermap.org/img/wn/{code}@2x.png"
     cur = js.get("current", {})
     dailies = (js.get("daily") or [])[:5]
-    cur_data = {"temp": round(cur.get("temp", 0)), "icon": icon_url(cur.get("weather", [{}])[0].get("icon", "01d"))}
+    def _safe_round(value):
+        return round(value) if isinstance(value, (int, float)) else None
+
+    cur_data = {
+        "temp": _safe_round(cur.get("temp", 0)),
+        "icon": icon_url(cur.get("weather", [{}])[0].get("icon", "01d")),
+        "feels_like": _safe_round(cur.get("feels_like")),
+        "humidity": _safe_round(cur.get("humidity")),
+        "dew_point": _safe_round(cur.get("dew_point")),
+    }
     days = []
     for d in dailies:
         dt = datetime.fromtimestamp(int(d.get("dt", 0)), tz=timezone.utc).astimezone(TZ).date()
@@ -321,7 +330,17 @@ def _owm_fetch_fiveday(lat, lon, key, units):
     fc = requests.get("https://api.openweathermap.org/data/2.5/forecast",
                       params={"lat": lat, "lon": lon, "appid": key, "units": units}, timeout=10).json()
     def icon_url(code): return f"https://openweathermap.org/img/wn/{code}@2x.png"
-    cur_data = {"temp": round(cur.get("main", {}).get("temp", 0)), "icon": icon_url(cur.get("weather", [{}])[0].get("icon", "01d"))}
+    def _safe_round(value):
+        return round(value) if isinstance(value, (int, float)) else None
+
+    main = cur.get("main", {})
+    cur_data = {
+        "temp": _safe_round(main.get("temp", 0)),
+        "icon": icon_url(cur.get("weather", [{}])[0].get("icon", "01d")),
+        "feels_like": _safe_round(main.get("feels_like")),
+        "humidity": _safe_round(main.get("humidity")),
+        "dew_point": _safe_round(main.get("dew_point")),
+    }
     by_day = collections.defaultdict(list)
     for it in fc.get("list", []):
         ts = int(it.get("dt", 0))
@@ -1775,11 +1794,14 @@ BOARD_HTML = r"""
   .weather .w-now {
     display:flex;
     align-items:center;
-    gap:10px;
-    min-width:180px;
+    gap:12px;
+    min-width:220px;
     flex:0 0 auto;
   }
+  .weather .w-now .info { display:flex; flex-direction:column; gap:6px; }
   .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
+  .weather .w-now .meta { display:flex; flex-direction:column; gap:4px; font-size:14px; opacity:.9; }
+  .weather .w-now .meta span { display:flex; align-items:center; gap:6px; }
 
   .weather .w-days {
     display:grid;
@@ -1947,12 +1969,40 @@ async function loadWeather() {
     // 현재(좌측)
     const now = document.createElement('div');
     now.className = 'w-now';
+    const current = data.current || {};
     const i = document.createElement('img');
-    i.src = data.current.icon; i.alt = ''; i.style.width='70px'; i.style.height='70px';
+    i.src = current.icon || ''; i.alt = ''; i.style.width='70px'; i.style.height='70px';
+    const info = document.createElement('div'); info.className = 'info';
     const t = document.createElement('div');
     t.className = 'temp';
-    t.textContent = data.current.temp + '°';
-    now.appendChild(i); now.appendChild(t);
+    const tempValue = (current.temp !== null && current.temp !== undefined) ? current.temp + '°' : '–';
+    t.textContent = tempValue;
+    info.appendChild(t);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const feels = current.feels_like;
+    const humidity = current.humidity;
+    const dew = current.dew_point;
+    if (feels !== null && feels !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `체감온도 ${feels}°`;
+      meta.appendChild(row);
+    }
+    if (humidity !== null && humidity !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `습도 ${humidity}%`;
+      meta.appendChild(row);
+    }
+    if (dew !== null && dew !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `이슬점 ${dew}°`;
+      meta.appendChild(row);
+    }
+    if (meta.childElementCount > 0) info.appendChild(meta);
+
+    now.appendChild(i);
+    now.appendChild(info);
 
     // 5일 카드(중앙) — 데이터가 7일 와도 5개만 사용
     const days = document.createElement('div');
