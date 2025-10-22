@@ -1784,7 +1784,7 @@ BOARD_HTML = r"""
   .weather .w-days {
     display:grid;
     grid-template-columns:repeat(5, minmax(0, 100px));
-    gap:10px;
+    gap:16px;
     justify-content:flex-start;
     flex:0 0 auto;
   }
@@ -1814,7 +1814,6 @@ BOARD_HTML = r"""
     flex-direction:column;
     justify-content:center;
     gap:4px;
-    margin-left:auto;
     flex:0 0 auto;
   }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
