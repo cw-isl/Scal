@@ -1805,10 +1805,11 @@ BOARD_HTML = r"""
 
   .weather .w-days {
     display:grid;
-    grid-template-columns:repeat(5, minmax(0, 100px));
+    grid-template-columns:repeat(5, minmax(0, 105px));
     gap:16px;
     justify-content:flex-start;
     flex:0 0 auto;
+    margin-right:auto;
   }
   .weather .w-day {
     text-align:center;
@@ -1816,7 +1817,7 @@ BOARD_HTML = r"""
     border:1px solid rgba(255,255,255,.08);
     border-radius:12px;
     padding:6px 4px;
-    width:100px;
+    width:105px;
   }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
 .weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
@@ -1826,7 +1827,7 @@ BOARD_HTML = r"""
 
 /* ▼ AQI card on the right */
   .weather .w-aqi {
-    width:100px;
+    width:105px;
     text-align:center;
     background:rgba(0,0,0,.25);
     border:1px solid rgba(255,255,255,.08);
