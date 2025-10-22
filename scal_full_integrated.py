@@ -1658,7 +1658,7 @@ BOARD_HTML = r"""
 <title>Smart Frame</title>
 <style>
   :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --weather:280px; --layout-left:420px; }
+          --weather:280px; --layout-left:420px; --section-gap:20px; }
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
@@ -1676,7 +1676,7 @@ BOARD_HTML = r"""
   .time { font-size:38px; font-weight:700; letter-spacing:1px; text-shadow:0 0 6px rgba(0,0,0,.65);}
   .date { font-size:22px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-  .cal { height:var(--cal); padding:8px 20px; box-sizing:border-box; display:flex; flex-direction:column; }
+  .cal { height:var(--cal); padding:8px 20px var(--section-gap); box-sizing:border-box; display:flex; flex-direction:column; }
   .cal h2 { margin:0 0 8px 0; font-size:22px; opacity:.95; display:flex; align-items:center; gap:8px; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
   .grid { flex:1 1 auto; display:grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap:6px; }
@@ -1696,7 +1696,7 @@ BOARD_HTML = r"""
     position:relative;
     min-height: calc(var(--H) - var(--top) - var(--cal));
     height:auto;
-    padding:10px 24px;
+    padding:var(--section-gap) 24px;
     box-sizing:border-box;
     display:grid;
     grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
@@ -1705,7 +1705,7 @@ BOARD_HTML = r"""
       "todo home"
       "bus home"
       "weather weather";
-    gap:16px;
+    gap:var(--section-gap);
     align-content:stretch;
   }
 
@@ -1770,21 +1770,21 @@ BOARD_HTML = r"""
 /* Weather layout (card style 5-day forecast) */
 .weather {
   display:flex;
-  gap:16px;
-  align-items:stretch;
+  gap:12px;
+  align-items:flex-start;
 }
 .weather .w-now {
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:10px;
   min-width:180px;
 }
-.weather .w-now .temp { font-size:44px; font-weight:800; line-height:1; }
+.weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
 
 .weather .w-days {
   display:grid;
   grid-template-columns:repeat(5,1fr);
-  gap:12px;
+  gap:10px;
   width:100%;
   align-items:stretch;
   flex:1 1 auto;
@@ -1794,12 +1794,12 @@ BOARD_HTML = r"""
   background:rgba(0,0,0,.25);
   border:1px solid rgba(255,255,255,.08);
   border-radius:12px;
-  padding:10px 6px;
+  padding:8px 6px;
   min-width:0;
 }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
-.weather .w-day img { width:72px; height:72px; display:block; margin:6px auto; }
-.weather .w-day .temps { display:flex; justify-content:center; gap:8px; font-size:14px; margin-top:4px; }
+.weather .w-day img { width:58px; height:58px; display:block; margin:4px auto; }
+.weather .w-day .temps { display:flex; justify-content:center; gap:6px; font-size:14px; margin-top:2px; }
 .weather .w-day .hi { font-weight:800; font-size:16px; }
 .weather .w-day .lo { opacity:.75; font-size:14px; }
 
