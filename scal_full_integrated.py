@@ -1767,17 +1767,20 @@ BOARD_HTML = r"""
 
   .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:20px 22px; min-height:360px; height:100%;}
   .home h3{margin-bottom:6px;}
-  .home .ha-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:4px;}
-  .home .ha-device{display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:center; padding:10px 6px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none;}
-  .home .ha-device .icon{font-size:24px;}
-  .home .ha-device .name{font-size:13px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;}
-  .home .ha-device .state{font-size:12px; opacity:.85;}
-  .home .ha-device.on{background:rgba(255,255,255,.18); border-color:#58ff93; box-shadow:0 0 18px rgba(88,255,147,.45);}
+  .home .ha-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:6px;}
+  .home .ha-device{display:flex; align-items:center; gap:14px; padding:18px 16px; border-radius:16px; background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none; min-height:82px;}
+  .home .ha-device .icon{font-size:30px;}
+  .home .ha-device .meta{display:flex; flex-direction:column; gap:6px; align-items:flex-start; min-width:0;}
+  .home .ha-device .name{font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+  .home .ha-device .state{font-size:14px; opacity:.9;}
+  .home .ha-device .state.on{color:#96f7c5;}
+  .home .ha-device .state.off{color:rgba(255,255,255,.82);}
+  .home .ha-device.on{background:rgba(255,255,255,.12); border-color:rgba(150,247,197,.55); box-shadow:0 0 22px rgba(150,247,197,.35);}
   .home .ha-device.offline{opacity:.55; border-style:dashed; border-color:rgba(255,255,255,.25); cursor:default;}
   .home .ha-device.disabled{cursor:default; opacity:.7;}
   .home .ha-device.pending{pointer-events:none; opacity:.65;}
   .home .ha-device.offline .state{color:#ffb4b4;}
-  .home .ha-status{grid-column:1 / -1; padding:10px; border-radius:10px; background:rgba(0,0,0,.28); font-size:13px; text-align:center; line-height:1.3;}
+  .home .ha-status{grid-column:1 / -1; padding:12px 16px; border-radius:12px; background:rgba(0,0,0,.32); font-size:14px; text-align:center; line-height:1.4;}
   .home .ha-device:active{transform:scale(.97);}
 
   /* Verse block */
@@ -2186,10 +2189,17 @@ function renderHomeControls(){
     if(!canToggle) item.className += ' disabled';
     if(isPending) item.className += ' pending';
     item.dataset.id = dev.id || '';
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-pressed', String(!!isOn));
+    const tooltip = [dev.name || dev.id || '', dev.room || '', dev.state_label || ''].filter(Boolean).join(' · ');
+    if(tooltip) item.title = tooltip;
 
     const icon = document.createElement('div');
     icon.className = 'icon';
     icon.textContent = dev.icon || '🔘';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
 
     const name = document.createElement('div');
     name.className = 'name';
@@ -2198,11 +2208,16 @@ function renderHomeControls(){
 
     const state = document.createElement('div');
     state.className = 'state';
+    if(!isPending && isOnline){
+      state.classList.add(isOn ? 'on' : 'off');
+    }
     state.textContent = isPending ? '동작 중…' : (dev.state_label || (isOn ? '켜짐' : '꺼짐'));
 
+    meta.appendChild(name);
+    meta.appendChild(state);
+
     item.appendChild(icon);
-    item.appendChild(name);
-    item.appendChild(state);
+    item.appendChild(meta);
 
     if(canToggle){
       item.addEventListener('click', () => toggleHADevice(dev));
