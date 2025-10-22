@@ -1698,35 +1698,31 @@ BOARD_HTML = r"""
     height:auto;
     padding:calc(var(--section-gap)/2) 24px var(--section-gap);
     box-sizing:border-box;
-    display:grid;
-    grid-template-columns: minmax(0, var(--layout-left)) minmax(0, 1fr);
-    grid-template-areas:
-      "verse verse"
-      "todo home"
-      "bus home"
-      "weather weather";
-    grid-template-rows:auto auto auto auto;
+    display:flex;
+    flex-direction:column;
     gap:var(--section-gap);
-    align-content:stretch;
   }
 
-  .section::after {
-    content:"";
-    position:absolute;
-    top:0;
-    bottom:0;
-    left:calc(var(--layout-left) + 6px);
-    width:1px;
-    background:rgba(255,255,255,.3);
-    opacity:.65;
-    pointer-events:none;
+  .section-upper {
+    display:grid;
+    grid-template-columns:minmax(0, var(--layout-left)) minmax(0, 1fr);
+    gap:var(--section-gap);
+    align-items:stretch;
   }
 
-  .section .verse { grid-area: verse; }
-  .section .todo { grid-area: todo; }
-  .section .bus { grid-area: bus; }
-  .section .home { grid-area: home; }
-  .section .weather { grid-area: weather; }
+  .section-left {
+    display:flex;
+    flex-direction:column;
+    gap:var(--section-gap);
+  }
+
+  .section-right {
+    display:flex;
+    flex-direction:column;
+    gap:var(--section-gap);
+    border-left:1px solid rgba(255,255,255,.3);
+    padding-left:calc(var(--section-gap) - 4px);
+  }
 
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
@@ -1771,25 +1767,26 @@ BOARD_HTML = r"""
 /* Weather layout (card style 5-day forecast) */
   .weather {
     display:flex;
-    gap:10px;
-    align-items:flex-start;
+    gap:16px;
+    align-items:stretch;
+    flex-wrap:wrap;
     padding:14px 16px;
   }
-.weather .w-now {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  min-width:180px;
-}
-.weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
+  .weather .w-now {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:180px;
+    flex:0 0 auto;
+  }
+  .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
 
   .weather .w-days {
     display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:8px;
-    width:100%;
-    align-items:stretch;
-    flex:1 1 auto;
+    grid-template-columns:repeat(5, 130px);
+    gap:10px;
+    justify-content:flex-start;
+    flex:0 0 auto;
   }
   .weather .w-day {
     text-align:center;
@@ -1797,7 +1794,7 @@ BOARD_HTML = r"""
     border:1px solid rgba(255,255,255,.08);
     border-radius:12px;
     padding:6px 4px;
-    min-width:0;
+    width:130px;
   }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
 .weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
@@ -1818,6 +1815,7 @@ BOARD_HTML = r"""
     justify-content:center;
     gap:4px;
     margin-left:auto;
+    flex:0 0 auto;
   }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
 .weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
@@ -1847,25 +1845,31 @@ BOARD_HTML = r"""
   </div>
 
   <div class="section">
-    <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
-    <div class="todo blk">
-      <h3>Todo</h3>
-      <div class="rows">
-        <div class="col" id="todo-col-1"></div>
-        <div class="col" id="todo-col-2"></div>
+    <div class="section-upper">
+      <div class="section-left">
+        <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
+        <div class="todo blk">
+          <h3>Todo</h3>
+          <div class="rows">
+            <div class="col" id="todo-col-1"></div>
+            <div class="col" id="todo-col-2"></div>
+          </div>
+        </div>
+        <div class="bus blk">
+          <div class="arrivals">
+            <h3 id="bus-title">BUS Info</h3>
+            <div class="stop" id="bus-stop"></div>
+            <div class="rows" id="businfo">
+              <div class="col" id="bus-left"></div>
+              <div class="col" id="bus-right"></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="home blk">
-      <h3>Home Control</h3>
-      <div class="ha-grid" id="ha-grid"></div>
-    </div>
-    <div class="bus blk">
-      <div class="arrivals">
-        <h3 id="bus-title">BUS Info</h3>
-        <div class="stop" id="bus-stop"></div>
-        <div class="rows" id="businfo">
-          <div class="col" id="bus-left"></div>
-          <div class="col" id="bus-right"></div>
+      <div class="section-right">
+        <div class="home blk">
+          <h3>Home Control</h3>
+          <div class="ha-grid" id="ha-grid"></div>
         </div>
       </div>
     </div>
