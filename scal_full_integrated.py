@@ -663,6 +663,17 @@ def _normalize_base_url(url: str) -> str:
     return url.rstrip("/")
 
 
+def _mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
+    value = (value or "").strip()
+    if not value:
+        return "설정안됨"
+    if len(value) <= 2:
+        return value[0] + "*" * (len(value) - 1) if len(value) == 2 else "*"
+    if len(value) <= head + tail:
+        return value[0] + "*" * (len(value) - 2) + value[-1]
+    return value[:head] + "*" * (len(value) - head - tail) + value[-tail:]
+
+
 def _home_assistant_session() -> Tuple[requests.Session, str, float, Dict[str, Any]]:
     cfg = _home_assistant_cfg()
     base_url = _normalize_base_url(cfg.get("base_url", ""))
@@ -2777,7 +2788,8 @@ if TB:
             [telebot.types.InlineKeyboardButton("1) iCal URL View/Change", callback_data="cfg_ical")],
             [telebot.types.InlineKeyboardButton("2) Todo (later)", callback_data="noop")],
             [telebot.types.InlineKeyboardButton("3) Photos (later)", callback_data="noop")],
-            [telebot.types.InlineKeyboardButton("4) 버스정보", callback_data="cfg_bus")],
+            [telebot.types.InlineKeyboardButton("4) Home Assistant", callback_data="cfg_ha")],
+            [telebot.types.InlineKeyboardButton("5) 버스정보", callback_data="cfg_bus")],
         ])
         TB.send_message(m.chat.id, "Smart Frame Settings", reply_markup=kb)
 
@@ -2788,12 +2800,13 @@ if TB:
         kb = kb_inline([
             [telebot.types.InlineKeyboardButton("1) calendar", callback_data="cfg_ical")],
             [telebot.types.InlineKeyboardButton("2) google oauth status", callback_data="cfg_ghow")],
-            [telebot.types.InlineKeyboardButton("3) 버스정보", callback_data="cfg_bus")],
-            [telebot.types.InlineKeyboardButton("4) photo (later)", callback_data="noop")],
-            [telebot.types.InlineKeyboardButton("5) weather (later)", callback_data="noop")],
-            [telebot.types.InlineKeyboardButton("6) manage events", callback_data="cal_manage")],
-            [telebot.types.InlineKeyboardButton("7) verse", callback_data="set_verse")],
-            [telebot.types.InlineKeyboardButton("8) 카카오버스 검색", callback_data="kbus_search")],
+            [telebot.types.InlineKeyboardButton("3) Home Assistant", callback_data="cfg_ha")],
+            [telebot.types.InlineKeyboardButton("4) 버스정보", callback_data="cfg_bus")],
+            [telebot.types.InlineKeyboardButton("5) photo (later)", callback_data="noop")],
+            [telebot.types.InlineKeyboardButton("6) weather (later)", callback_data="noop")],
+            [telebot.types.InlineKeyboardButton("7) manage events", callback_data="cal_manage")],
+            [telebot.types.InlineKeyboardButton("8) verse", callback_data="set_verse")],
+            [telebot.types.InlineKeyboardButton("9) 카카오버스 검색", callback_data="kbus_search")],
         ])
         TB.send_message(m.chat.id, "Select category:", reply_markup=kb)
 
@@ -2827,7 +2840,7 @@ if TB:
         kb.add(telebot.types.InlineKeyboardButton("View", callback_data="cal_view"))
         TB.send_message(c.message.chat.id, "Calendar menu:", reply_markup=kb)
 
-    @TB.callback_query_handler(func=lambda c: c.data in ("cfg_ical", "cfg_ghow", "noop", "set_verse", "cfg_bus"))
+    @TB.callback_query_handler(func=lambda c: c.data in ("cfg_ical", "cfg_ghow", "cfg_ha", "noop", "set_verse", "cfg_bus"))
     def on_cb(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "Not authorized."); return
@@ -2843,6 +2856,23 @@ if TB:
             have_token = GTOKEN_PATH.exists()
             msg = f"Google OAuth: {'connected' if have_token else 'not connected'}\nOpen /oauth/start in the web UI."
             TB.send_message(c.message.chat.id, msg)
+        elif c.data == "cfg_ha":
+            TB.answer_callback_query(c.id)
+            cfg = CFG.setdefault("home_assistant", {})
+            base_url = _normalize_base_url(cfg.get("base_url", "")) or "설정안됨"
+            token_status = "등록됨" if cfg.get("token") else "미등록"
+            kb = telebot.types.InlineKeyboardMarkup(row_width=1)
+            kb.add(
+                telebot.types.InlineKeyboardButton("베이스 URL 설정", callback_data="ha_set_base_url"),
+                telebot.types.InlineKeyboardButton("토큰 설정", callback_data="ha_set_token"),
+                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="ha_show_config"),
+            )
+            msg = (
+                "Home Assistant 연동 메뉴입니다.\n"
+                f"현재 베이스 URL: {base_url}\n"
+                f"토큰: {token_status}"
+            )
+            TB.send_message(c.message.chat.id, msg, reply_markup=kb)
         elif c.data == "set_verse":
             TB.answer_callback_query(c.id)
             st = load_state(); st[str(c.from_user.id)] = {"mode": "await_verse"}; save_state(st)
@@ -2859,6 +2889,43 @@ if TB:
             TB.send_message(c.message.chat.id, "버스 정보 메뉴를 선택하세요:", reply_markup=kb)
         elif c.data == "noop":
             TB.answer_callback_query(c.id, "Coming soon")
+
+    @TB.callback_query_handler(func=lambda c: c.data in ("ha_set_base_url", "ha_set_token", "ha_show_config"))
+    def on_cb_home_assistant(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        cfg = CFG.setdefault("home_assistant", {})
+        if c.data == "ha_set_base_url":
+            current = _normalize_base_url(cfg.get("base_url", "")) or "설정안됨"
+            st = load_state(); st[str(c.from_user.id)] = {"mode": "await_ha_base_url"}; save_state(st)
+            TB.send_message(
+                c.message.chat.id,
+                f"현재 베이스 URL: {current}\n새 Home Assistant URL을 입력하세요 (예: https://example.duckdns.org).\n/cancel 로 취소합니다.",
+            )
+        elif c.data == "ha_set_token":
+            masked = _mask_secret(cfg.get("token"))
+            st = load_state(); st[str(c.from_user.id)] = {"mode": "await_ha_token"}; save_state(st)
+            TB.send_message(
+                c.message.chat.id,
+                f"현재 토큰: {masked}\nHome Assistant Long-Lived Access Token을 입력하세요.\n/cancel 로 취소합니다.",
+            )
+        else:
+            base_url = _normalize_base_url(cfg.get("base_url", "")) or "설정안됨"
+            token_masked = _mask_secret(cfg.get("token"))
+            verify = cfg.get("verify_ssl", True)
+            timeout = cfg.get("timeout", 5)
+            domains = ", ".join(cfg.get("include_domains") or []) or "(없음)"
+            entities = ", ".join(cfg.get("include_entities") or []) or "(없음)"
+            lines = [
+                f"베이스 URL: {base_url}",
+                f"토큰: {token_masked}",
+                f"SSL 검증: {verify}",
+                f"요청 타임아웃: {timeout}",
+                f"도메인 필터: {domains}",
+                f"엔티티 필터: {entities}",
+            ]
+            TB.send_message(c.message.chat.id, "\n".join(lines))
 
     @TB.callback_query_handler(func=lambda c: c.data == "kbus_search")
     def on_cb_kbus_search(c):
@@ -3183,6 +3250,35 @@ if TB:
             CFG["bus"]["key"] = val
             save_config_to_source(CFG)
             TB.reply_to(m, "변경완료")
+            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
+            return
+
+        # home assistant: base url
+        if st.get("mode") == "await_ha_base_url":
+            new_url = (m.text or "").strip()
+            if not new_url:
+                TB.reply_to(m, "빈 값은 저장할 수 없습니다. 다시 입력하거나 /cancel 로 취소하세요."); return
+            if not re.match(r"^https?://", new_url, re.IGNORECASE):
+                TB.reply_to(m, "http:// 또는 https:// 로 시작하는 URL을 입력하세요."); return
+            normalized = _normalize_base_url(new_url)
+            if not normalized:
+                TB.reply_to(m, "유효한 URL을 입력해주세요."); return
+            cfg = CFG.setdefault("home_assistant", {})
+            cfg["base_url"] = normalized
+            save_config_to_source(CFG)
+            TB.reply_to(m, f"Home Assistant URL 저장 완료: {normalized}")
+            allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
+            return
+
+        # home assistant: token
+        if st.get("mode") == "await_ha_token":
+            token = (m.text or "").strip()
+            if not token:
+                TB.reply_to(m, "빈 값은 저장할 수 없습니다. 다시 입력하거나 /cancel 로 취소하세요."); return
+            cfg = CFG.setdefault("home_assistant", {})
+            cfg["token"] = token
+            save_config_to_source(CFG)
+            TB.reply_to(m, f"토큰 저장 완료: {_mask_secret(token)}")
             allst = load_state(); allst.pop(str(m.from_user.id), None); save_state(allst)
             return
 
