@@ -77,7 +77,7 @@ Fully-integrated Smart Frame + Telegram bot with Google OAuth routes
 import os, json, time, secrets, threading, collections, re, socket, fcntl, xml.etree.ElementTree as ET, subprocess, sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote
 
 import requests
@@ -204,7 +204,11 @@ DEFAULT_CFG = {
         "verify_ssl": True,
         "timeout": 5,
         "include_domains": ["light", "switch"],
-        "include_entities": []
+        "include_entities": [],
+        "dashboard": {
+            "url_path": "",
+            "title": ""
+        }
     },
     # Todoist (config에서 설정) — 여기 값은 기본값
     "todoist": {
@@ -626,6 +630,9 @@ HA_SERVICE_MAP: Dict[str, Tuple[Optional[str], Optional[str]]] = {
 }
 
 
+HA_ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$", re.IGNORECASE)
+
+
 def _coerce_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -772,6 +779,19 @@ def _ha_fetch_device_area(session: requests.Session, base_url: str, timeout: flo
         if isinstance(device_id, str) and isinstance(area_id, str) and area_id:
             device_area[device_id] = area_id
     return device_area
+
+
+def _ha_collect_entities(node: Any, acc: Set[str]) -> None:
+    if isinstance(node, dict):
+        for value in node.values():
+            _ha_collect_entities(value, acc)
+    elif isinstance(node, (list, tuple, set)):
+        for item in node:
+            _ha_collect_entities(item, acc)
+    elif isinstance(node, str):
+        candidate = node.strip()
+        if candidate and HA_ENTITY_ID_RE.match(candidate):
+            acc.add(candidate)
 
 
 def _ha_should_include(entity_id: str, cfg: Dict[str, Any]) -> bool:
@@ -952,6 +972,88 @@ def home_assistant_list_devices() -> List[Dict[str, Any]]:
             session.close()
         except Exception:
             pass
+
+
+def home_assistant_list_dashboards() -> List[Dict[str, Any]]:
+    session, base_url, timeout, _cfg = _home_assistant_session()
+    try:
+        data = _ha_request(session, "GET", f"{base_url}/api/lovelace/dashboards", timeout=timeout)
+        if not isinstance(data, list):
+            raise HomeAssistantAPIError("/api/lovelace/dashboards 응답 형식이 올바르지 않습니다.")
+        dashboards: List[Dict[str, Any]] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            url_path = (item.get("url_path") or item.get("id") or "").strip()
+            title = (item.get("title") or url_path or item.get("id") or "").strip()
+            dashboards.append(
+                {
+                    "id": item.get("id") or url_path or title,
+                    "title": title or "(이름 없음)",
+                    "url_path": url_path,
+                    "mode": item.get("mode") or "",
+                    "require_admin": bool(item.get("require_admin")),
+                }
+            )
+        dashboards.sort(key=lambda d: (d.get("title") or "").lower())
+        return dashboards
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+def home_assistant_fetch_dashboard_entities(url_path: str) -> Tuple[str, List[str]]:
+    url_path = (url_path or "").strip()
+    if not url_path:
+        raise HomeAssistantAPIError("대시보드 식별자가 필요합니다.")
+
+    session, base_url, timeout, _cfg = _home_assistant_session()
+    try:
+        safe_path = quote(url_path, safe="")
+        data = _ha_request(
+            session,
+            "GET",
+            f"{base_url}/api/lovelace/dashboards/{safe_path}",
+            timeout=timeout,
+        )
+        if not isinstance(data, dict):
+            raise HomeAssistantAPIError("대시보드 상세 응답 형식이 올바르지 않습니다.")
+
+        title = (data.get("title") or data.get("id") or url_path).strip()
+        views: List[Any] = []
+        config = data.get("config")
+        if isinstance(config, dict) and isinstance(config.get("views"), list):
+            views = config.get("views") or []
+        elif isinstance(data.get("views"), list):
+            views = data.get("views") or []
+
+        found: Set[str] = set()
+        for view in views:
+            _ha_collect_entities(view, found)
+
+        if not found:
+            raise HomeAssistantAPIError("선택한 대시보드에서 제어할 엔티티를 찾지 못했습니다.")
+
+        return title, sorted(found)
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+def home_assistant_apply_dashboard(url_path: str) -> Dict[str, Any]:
+    title, entities = home_assistant_fetch_dashboard_entities(url_path)
+    cfg = CFG.setdefault("home_assistant", {})
+    cfg["include_entities"] = entities
+    dashboard_cfg = cfg.setdefault("dashboard", {})
+    dashboard_cfg["url_path"] = url_path
+    dashboard_cfg["title"] = title
+    dashboard_cfg["entity_count"] = len(entities)
+    save_config_to_source(CFG)
+    return {"title": title, "count": len(entities), "entities": entities}
 
 
 def home_assistant_execute(entity_id: str, turn_on: bool) -> Any:
@@ -1790,6 +1892,15 @@ def api_home_devices():
     try:
         devices = home_assistant_list_devices()
         resp: Dict[str, Any] = {"devices": devices}
+        dash_cfg = _home_assistant_cfg().get("dashboard") or {}
+        if isinstance(dash_cfg, dict) and (
+            dash_cfg.get("title") or dash_cfg.get("url_path")
+        ):
+            resp["dashboard"] = {
+                "title": dash_cfg.get("title") or "",
+                "url_path": dash_cfg.get("url_path") or "",
+                "entity_count": dash_cfg.get("entity_count"),
+            }
         if not devices:
             resp["message"] = "Home Assistant에서 표시할 기기를 찾지 못했습니다."
         return jsonify(resp)
@@ -2292,17 +2403,19 @@ loadTodo(); setInterval(loadTodo, 20*1000);
 
 // ===== Home Assistant 제어 패널 =====
 let haDevices = [];
-const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'' };
+const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'', dashboardTitle:'' };
 
 function renderHomeControls(){
   const grid = document.getElementById('ha-grid');
   if(!grid) return;
   grid.innerHTML = '';
 
-  const statuses = [];
-  if(haDevicesState.loading){
-    statuses.push('Home Assistant 기기 정보를 불러오는 중…');
+  const heading = document.querySelector('.home h3');
+  if(heading){
+    heading.textContent = haDevicesState.dashboardTitle ? `Home Control · ${haDevicesState.dashboardTitle}` : 'Home Control';
   }
+
+  const statuses = [];
   if(haDevicesState.needConfig){
     statuses.push(haDevicesState.message || 'Home Assistant 연동 설정이 필요합니다.');
   }
@@ -2393,10 +2506,12 @@ async function loadHomeDevices(){
       throw new Error('HTTP ' + r.status);
     }
     const data = await r.json();
+    haDevicesState.dashboardTitle = data.dashboard && data.dashboard.title ? data.dashboard.title : '';
     if(data.need_config){
       haDevices = [];
       haDevicesState.needConfig = true;
       haDevicesState.message = data.message || 'Home Assistant 연동을 설정하세요.';
+      haDevicesState.dashboardTitle = '';
       return;
     }
     haDevicesState.needConfig = false;
@@ -2411,6 +2526,7 @@ async function loadHomeDevices(){
   }catch(e){
     haDevices = [];
     haDevicesState.fetchError = (e && e.message) ? e.message : '알 수 없는 오류';
+    haDevicesState.dashboardTitle = '';
   }finally{
     haDevicesState.loading = false;
     renderHomeControls();
@@ -2421,10 +2537,12 @@ async function toggleHADevice(dev){
   if(!dev || dev.pending || dev.can_toggle !== true || dev.online === false){
     return;
   }
+  const desired = !(dev.state && dev.state.on === true);
   dev.pending = true;
+  dev.state = Object.assign({}, dev.state, { on: desired });
+  dev.state_label = desired ? '켜짐' : '꺼짐';
   renderHomeControls();
   try{
-    const desired = !(dev.state && dev.state.on === true);
     const r = await fetch(`/api/home-devices/${encodeURIComponent(dev.id)}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2865,6 +2983,8 @@ if TB:
             kb.add(
                 telebot.types.InlineKeyboardButton("베이스 URL 설정", callback_data="ha_set_base_url"),
                 telebot.types.InlineKeyboardButton("토큰 설정", callback_data="ha_set_token"),
+                telebot.types.InlineKeyboardButton("대시보드 선택", callback_data="ha_choose_dashboard"),
+                telebot.types.InlineKeyboardButton("대시보드 해제", callback_data="ha_clear_dashboard"),
                 telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="ha_show_config"),
             )
             msg = (
@@ -2925,7 +3045,78 @@ if TB:
                 f"도메인 필터: {domains}",
                 f"엔티티 필터: {entities}",
             ]
+            dash = cfg.get("dashboard") or {}
+            if dash.get("title") or dash.get("url_path"):
+                lines.append(
+                    f"대시보드: {dash.get('title') or '(제목 없음)'} ({dash.get('url_path') or '미지정'})"
+                )
+                if dash.get("entity_count"):
+                    lines.append(f"대시보드 연동 엔티티 수: {dash.get('entity_count')}")
+            else:
+                lines.append("대시보드: (연동 안함)")
             TB.send_message(c.message.chat.id, "\n".join(lines))
+
+    @TB.callback_query_handler(func=lambda c: c.data == "ha_clear_dashboard")
+    def on_cb_ha_clear_dashboard(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        cfg = CFG.setdefault("home_assistant", {})
+        cfg["include_entities"] = []
+        dash_cfg = cfg.setdefault("dashboard", {})
+        dash_cfg.clear()
+        dash_cfg.update({"url_path": "", "title": ""})
+        save_config_to_source(CFG)
+        TB.send_message(c.message.chat.id, "대시보드 선택을 해제하고 엔티티 필터를 초기화했습니다.")
+
+    @TB.callback_query_handler(func=lambda c: c.data == "ha_choose_dashboard")
+    def on_cb_ha_choose_dashboard(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        try:
+            dashboards = home_assistant_list_dashboards()
+        except HomeAssistantError as e:
+            TB.send_message(c.message.chat.id, f"대시보드 목록 조회 실패: {e}")
+            return
+        if not dashboards:
+            TB.send_message(c.message.chat.id, "사용 가능한 대시보드를 찾지 못했습니다.")
+            return
+        kb = telebot.types.InlineKeyboardMarkup(row_width=1)
+        added = False
+        for dash in dashboards:
+            url_path = (dash.get("url_path") or "").strip()
+            title = dash.get("title") or url_path or dash.get("id") or "(제목 없음)"
+            if not url_path:
+                continue
+            label = f"{title} ({url_path})"
+            kb.add(telebot.types.InlineKeyboardButton(label, callback_data=f"ha_dashsel:{url_path}"))
+            added = True
+        if not added:
+            TB.send_message(c.message.chat.id, "선택 가능한 대시보드가 없습니다.")
+            return
+        TB.send_message(c.message.chat.id, "연동할 대시보드를 선택하세요:", reply_markup=kb)
+
+    @TB.callback_query_handler(func=lambda c: c.data.startswith("ha_dashsel:"))
+    def on_cb_ha_dashsel(c):
+        if not allowed(c.from_user.id):
+            TB.answer_callback_query(c.id, "Not authorized."); return
+        TB.answer_callback_query(c.id)
+        url_path = c.data.split(":", 1)[1]
+        try:
+            result = home_assistant_apply_dashboard(url_path)
+        except HomeAssistantError as e:
+            TB.send_message(c.message.chat.id, f"대시보드 적용 실패: {e}")
+            return
+        title = result.get("title") or url_path
+        count = result.get("count")
+        msg = f"대시보드 적용 완료: {title}"
+        if count is not None:
+            msg += f" (엔티티 {count}개)"
+        TB.send_message(
+            c.message.chat.id,
+            msg + "\nHome Control 패널이 새로운 엔티티 목록으로 곧 갱신됩니다.",
+        )
 
     @TB.callback_query_handler(func=lambda c: c.data == "kbus_search")
     def on_cb_kbus_search(c):
