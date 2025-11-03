@@ -30,8 +30,8 @@ EMBEDDED_CONFIG = r"""{
     }
   },
   "home_assistant": {
-    "base_url": "http://localhost:8123",
-    "token": "",
+    "base_url": "http://ttms03.duckdns.org:8123",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkZDVlMWRkY2U2ZjY0Njk1ODUyMjc0OGIyOTg3OTgwOSIsImlhdCI6MTc2MTc5MzI5MywiZXhwIjoyMDc3MTUzMjkzfQ.R2ZZEPSOwyXFL6gNrVhfCmJxtcP-qFvT5EZsn5bZdVI",
     "verify_ssl": true,
     "timeout": 5,
     "include_domains": [
