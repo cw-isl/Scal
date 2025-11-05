@@ -1,0 +1,854 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Smart Frame</title>
+<style>
+  :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
+          --weather:280px; --layout-left:420px; --section-gap:20px;
+          --section-card-gap:calc(var(--section-gap) - 4px); }
+
+  /* Global layout */
+  html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
+  .frame { width:var(--W); min-height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
+
+  /* Background photo crossfade */
+  .bg, .bg2 {
+    position: fixed; inset: 0; z-index: -1;
+    background-size: cover; background-position: center center; background-repeat: no-repeat;
+    transition: opacity 1s ease;
+  }
+  .bg2 { opacity: 0; }
+
+  .top { height:var(--top); display:flex; align-items:center; justify-content:space-between; padding:0 24px; box-sizing:border-box; }
+  .time { font-size:38px; font-weight:700; letter-spacing:1px; text-shadow:0 0 6px rgba(0,0,0,.65);}
+  .date { font-size:22px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
+
+  .cal { height:auto; min-height:var(--cal); padding:8px 20px calc(var(--section-gap)/2); box-sizing:border-box; display:flex; flex-direction:column; }
+  .cal h2 { margin:0 0 8px 0; font-size:22px; opacity:.95; display:flex; align-items:center; gap:8px; text-shadow:0 0 6px rgba(0,0,0,.65);}
+
+  .grid { flex:1 1 auto; display:grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap:6px; }
+  .dow { display:grid; grid-template-columns: repeat(7, 1fr); margin-bottom:6px; opacity:.95; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,.65);}
+  .dow div { text-align:center; }
+
+  /* Calendar cells */
+  .cell { border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:6px;
+          background:rgba(0,0,0,.35); display:flex; flex-direction:column; overflow:hidden;}
+  .cell.dim { opacity:.45; }
+  .dnum { font-size:14px; opacity:.95; margin-bottom:4px; text-shadow:0 0 6px rgba(0,0,0,.65);}
+  .ev { font-size:12px; line-height:1.25; margin:2px 0;
+        background:rgba(0,0,0,.45); border-radius:6px; padding:2px 6px;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(0,0,0,.65);}
+
+  .section {
+    position:relative;
+    min-height:auto;
+    height:auto;
+    padding:calc(var(--section-gap)/2) 24px var(--section-gap);
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    gap:var(--section-gap);
+  }
+
+  .section-upper {
+    display:grid;
+    grid-template-columns:minmax(0, var(--layout-left)) minmax(0, 1fr);
+    gap:var(--section-card-gap);
+    align-items:stretch;
+  }
+
+  .section-left {
+    display:flex;
+    flex-direction:column;
+    gap:var(--section-card-gap);
+  }
+
+  .section-right {
+    display:flex;
+    flex-direction:column;
+    gap:var(--section-card-gap);
+    border-left:none;
+    padding-left:0;
+  }
+
+  .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
+  .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
+
+.todo{ display:flex; flex-direction:column; height:100%; min-height:170px; }
+  .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; flex:1 1 auto; }
+  .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
+  .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
+
+  .bus{display:flex; flex-direction:column; gap:10px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:16px 18px; height:100%; min-height:190px;}
+  .bus .arrivals{display:flex; flex-direction:column; gap:8px; min-width:0; flex:1 1 auto;}
+  .bus .arrivals h3{margin-bottom:0;}
+  .bus .stop{font-size:14px; margin-bottom:4px;}
+  .bus .rows{display:flex; gap:10px; overflow:hidden;}
+  .bus .col{flex:1 1 50%; display:flex; flex-direction:column; gap:6px;}
+  .bus .item{display:flex; font-size:14px; white-space:nowrap;}
+  .bus .item .rt{font-weight:700; width:8ch; white-space:nowrap;}
+  .bus .item .hops{width:6ch; text-align:right; margin-right:4px; white-space:nowrap;}
+  .bus .item .msg{flex:0 0 6ch; text-align:right; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:20px 22px; min-height:360px; height:100%;}
+  .home h3{margin-bottom:6px;}
+  .home .ha-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:6px;}
+  .home .ha-device{display:flex; align-items:center; gap:14px; padding:18px 16px; border-radius:16px; background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none; min-height:82px;}
+  .home .ha-device .icon{font-size:30px;}
+  .home .ha-device .meta{display:flex; flex-direction:column; gap:6px; align-items:flex-start; min-width:0;}
+  .home .ha-device .name{font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+  .home .ha-device .state{font-size:14px; opacity:.9;}
+  .home .ha-device .state.on{color:#96f7c5;}
+  .home .ha-device .state.off{color:rgba(255,255,255,.82);}
+  .home .ha-device.on{background:rgba(255,255,255,.12); border-color:rgba(150,247,197,.55); box-shadow:0 0 22px rgba(150,247,197,.35);}
+  .home .ha-device.offline{opacity:.55; border-style:dashed; border-color:rgba(255,255,255,.25); cursor:default;}
+  .home .ha-device.disabled{cursor:default; opacity:.7;}
+  .home .ha-device.pending{pointer-events:none; opacity:.65;}
+  .home .ha-device.offline .state{color:#ffb4b4;}
+  .home .ha-status{grid-column:1 / -1; padding:12px 16px; border-radius:12px; background:rgba(0,0,0,.32); font-size:14px; text-align:center; line-height:1.4;}
+  .home .ha-device:active{transform:scale(.97);}
+
+  /* Verse block */
+  .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
+  .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
+
+/* Weather layout (card style 5-day forecast) */
+  .weather {
+    display:flex;
+    gap:16px;
+    align-items:stretch;
+    flex-wrap:wrap;
+    padding:14px 16px;
+  }
+  .weather .w-now {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:220px;
+    flex:0 0 auto;
+  }
+  .weather .w-now .info { display:flex; flex-direction:column; gap:6px; }
+  .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
+  .weather .w-now .meta { display:flex; flex-direction:column; gap:4px; font-size:14px; opacity:.9; }
+  .weather .w-now .meta span { display:flex; align-items:center; gap:6px; }
+
+  .weather .w-days {
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0, 105px));
+    gap:16px;
+    justify-content:flex-start;
+    flex:0 0 auto;
+    margin-right:auto;
+  }
+  .weather .w-day {
+    text-align:center;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:6px 4px;
+    width:105px;
+  }
+.weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
+.weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
+.weather .w-day .temps { display:flex; justify-content:center; gap:6px; font-size:14px; margin-top:2px; }
+.weather .w-day .hi { font-weight:800; font-size:16px; }
+.weather .w-day .lo { opacity:.75; font-size:14px; }
+
+/* ▼ AQI card on the right */
+  .weather .w-aqi {
+    width:105px;
+    text-align:center;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:10px 6px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:4px;
+    flex:0 0 auto;
+  }
+.weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
+.weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
+.weather .w-aqi .lbl { font-size:14px; opacity:.9; }
+.weather .w-aqi .pm { font-size:12px; opacity:.85; }
+
+/* Background must stay behind content */
+.bg, .bg2 { z-index:-1; }
+.frame { position:relative; z-index:1; }
+
+</style>
+</head>
+<body>
+<div class="bg" id="bg1"></div>
+<div class="bg2" id="bg2"></div>
+
+<div class="frame">
+  <div class="top">
+    <div class="time" id="clock">--:--</div>
+    <div class="date" id="datetxt">----</div>
+  </div>
+
+  <div class="cal">
+    <h2 id="cal-title">Calendar</h2>
+    <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-upper">
+      <div class="section-left">
+        <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
+        <div class="todo blk">
+          <h3>Todo</h3>
+          <div class="rows">
+            <div class="col" id="todo-col-1"></div>
+            <div class="col" id="todo-col-2"></div>
+          </div>
+        </div>
+        <div class="bus blk">
+          <div class="arrivals">
+            <h3 id="bus-title">BUS Info</h3>
+            <div class="stop" id="bus-stop"></div>
+            <div class="rows" id="businfo">
+              <div class="col" id="bus-left"></div>
+              <div class="col" id="bus-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section-right">
+        <div class="home blk">
+          <h3>Home Control</h3>
+          <div class="ha-grid" id="ha-grid"></div>
+        </div>
+      </div>
+    </div>
+    <div class="weather blk" id="weather"></div>
+  </div>
+</div>
+
+<script>
+function z(n){return n<10?'0'+n:n}
+function tick(){
+  const d=new Date();
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('clock').textContent = z(d.getHours())+":"+z(d.getMinutes());
+  document.getElementById('datetxt').textContent = d.getFullYear()+"."+z(d.getMonth()+1)+"."+z(d.getDate())+" ("+days[d.getDay()]+")";
+}
+setInterval(tick, 1000); tick();
+
+function startOfWeek(d){ const day=d.getDay(); const s=new Date(d); s.setDate(d.getDate()-day); s.setHours(0,0,0,0); return s; }
+
+async function loadEvents(){
+  const d=new Date();
+  const y=d.getFullYear(), m=d.getMonth()+1;
+  document.getElementById('cal-title').textContent = `Calendar  ${y}-${z(m)}`;
+  const r = await fetch(`/api/events?year=${y}&month=${m}`);
+  const items = await r.json();
+
+  const byDay = {};
+  for(const ev of items){
+    const k = (ev.start||'').substring(0,10);
+    (byDay[k]=byDay[k]||[]).push(ev);
+  }
+
+  const first = new Date(y, m-1, 1);
+  let cur = startOfWeek(first);
+  const grid = document.getElementById('grid'); grid.innerHTML='';
+  let count = 0;
+  while(count < 42){
+    const cell = document.createElement('div');
+    cell.className = 'cell' + ((cur.getMonth()+1!==m)?' dim':'');
+    const key = `${cur.getFullYear()}-${z(cur.getMonth()+1)}-${z(cur.getDate())}`;
+    const dn  = document.createElement('div'); dn.className='dnum'; dn.textContent = cur.getDate();
+    cell.appendChild(dn);
+    const arr = (byDay[key]||[]).slice(0,3);
+    for(const ev of arr){
+      const e=document.createElement('div'); e.className='ev'; e.textContent = ev.title || '(untitled)';
+      cell.appendChild(e);
+    }
+    grid.appendChild(cell);
+    cur.setDate(cur.getDate()+1);
+    count++;
+  }
+}
+loadEvents(); setInterval(loadEvents, 5*60*1000);
+
+
+
+
+// ===== Weather block (final: card-style 5-day forecast) =====
+async function loadWeather() {
+  const box = document.getElementById('weather');
+  try {
+    // 날씨 + AQI 동시 요청
+    const [wr, ar] = await Promise.all([
+      fetch('/api/weather'),
+      fetch('/api/air')
+    ]);
+
+    const data = await wr.json();
+    const air  = await ar.json().catch(()=>null);
+
+    box.innerHTML = '';
+
+    if (data && data.need_config) { box.textContent = 'OWM API Key required'; return; }
+    if (!data || data.error)     { box.textContent = 'Weather error';       return; }
+
+    // 현재(좌측)
+    const now = document.createElement('div');
+    now.className = 'w-now';
+    const current = data.current || {};
+    const i = document.createElement('img');
+    i.src = current.icon || ''; i.alt = ''; i.style.width='70px'; i.style.height='70px';
+    const info = document.createElement('div'); info.className = 'info';
+    const t = document.createElement('div');
+    t.className = 'temp';
+    const tempValue = (current.temp !== null && current.temp !== undefined) ? current.temp + '°' : '–';
+    t.textContent = tempValue;
+    info.appendChild(t);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const feels = current.feels_like;
+    const humidity = current.humidity;
+    const dew = current.dew_point;
+    if (feels !== null && feels !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `체감온도 ${feels}°`;
+      meta.appendChild(row);
+    }
+    if (humidity !== null && humidity !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `습도 ${humidity}%`;
+      meta.appendChild(row);
+    }
+    if (dew !== null && dew !== undefined) {
+      const row = document.createElement('span');
+      row.textContent = `이슬점 ${dew}°`;
+      meta.appendChild(row);
+    }
+    if (meta.childElementCount > 0) info.appendChild(meta);
+
+    now.appendChild(i);
+    now.appendChild(info);
+
+    // 5일 카드(중앙) — 데이터가 7일 와도 5개만 사용
+    const days = document.createElement('div');
+    days.className = 'w-days';
+    const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const todayIso = new Date().toISOString().slice(0,10);
+
+    const fiveDays = (Array.isArray(data.days) ? data.days : []).slice(0, 5);
+    for (const d of fiveDays) {
+      const dt = new Date(d.date);
+      const item = document.createElement('div');
+      item.className = 'w-day';
+      if (d.date === todayIso) item.classList.add('today');
+
+      const nm = document.createElement('div'); nm.className='nm'; nm.textContent = names[dt.getDay()];
+      const im = document.createElement('img'); im.src = d.icon; im.alt = '';
+      const temps = document.createElement('div'); temps.className='temps';
+      const hi = document.createElement('div'); hi.className='hi'; hi.textContent = d.max + '°';
+      const lo = document.createElement('div'); lo.className='lo'; lo.textContent = d.min + '°';
+      temps.appendChild(hi); temps.appendChild(lo);
+
+      item.appendChild(nm); item.appendChild(im); item.appendChild(temps);
+      days.appendChild(item);
+    }
+
+    // AQI 카드(우측 끝)
+    const aqiCard = document.createElement('div');
+    aqiCard.className = 'w-aqi';
+    const ttl = document.createElement('div'); ttl.className='ttl'; ttl.textContent = 'AQI';
+    const idx = document.createElement('div'); idx.className='idx';
+    const lbl = document.createElement('div'); lbl.className='lbl';
+    const pm25 = document.createElement('div'); pm25.className='pm pm25';
+    const pm10 = document.createElement('div'); pm10.className='pm pm10';
+
+    if (air && !air.error && !air.need_config) {
+      idx.textContent = air.aqi != null ? String(air.aqi) : '?';
+      lbl.textContent = air.label || '';
+      if (air.color) {
+        aqiCard.style.boxShadow = `inset 0 0 0 2px ${air.color}`;
+        aqiCard.style.color = '#fff';
+      }
+      if (air.pm2_5 != null) pm25.textContent = 'PM2.5 ' + Math.round(air.pm2_5);
+      if (air.pm10  != null) pm10.textContent  = 'PM10 '  + Math.round(air.pm10);
+    } else {
+      idx.textContent = '–';
+      lbl.textContent = 'n/a';
+    }
+    aqiCard.appendChild(ttl); aqiCard.appendChild(idx); aqiCard.appendChild(lbl);
+    if (pm25.textContent) aqiCard.appendChild(pm25);
+    if (pm10.textContent) aqiCard.appendChild(pm10);
+
+    // 조립
+    box.appendChild(now);
+    box.appendChild(days);
+    box.appendChild(aqiCard);
+
+  } catch (e) {
+    if (box) box.textContent = 'Failed to load weather';
+  }
+}
+loadWeather();
+setInterval(loadWeather, 10 * 60 * 1000);
+
+// ===== Verse block =====
+async function loadVerse(){
+  try{
+    const r = await fetch('/api/verse');
+    const js = await r.json();
+    document.getElementById('verse').textContent = js.text || '';
+  }catch(e){
+    document.getElementById('verse').textContent = '';
+  }
+}
+loadVerse(); setInterval(loadVerse, 10*1000);
+
+// ===== Todo block (Todoist, 2 columns, 10 each) =====
+function fmtDue(v){
+  if(!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (m) return m[2] + '/' + m[3];
+    return v;
+  }
+  return (d.getMonth()+1) + '/' + d.getDate();
+}
+
+async function loadTodo(){
+  try{
+    const r = await fetch('/api/todo');
+    const data = await r.json();
+    const c1 = document.getElementById('todo-col-1');
+    const c2 = document.getElementById('todo-col-2');
+    c1.innerHTML = ''; c2.innerHTML = '';
+
+    if (data.need_config){
+      const msg = document.createElement('div'); msg.textContent = 'Todoist API token required';
+      c1.appendChild(msg);
+      return;
+    }
+    if (!Array.isArray(data) || data.length === 0){
+      const msg = document.createElement('div'); msg.textContent = 'No pending tasks.';
+      c1.appendChild(msg);
+      return;
+    }
+
+    const first10 = data.slice(0,10);
+    const next10  = data.slice(10,20);
+
+    for (const t of first10){
+      const row = document.createElement('div'); row.className='item';
+      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
+      row.appendChild(date); row.appendChild(title); c1.appendChild(row);
+    }
+    for (const t of next10){
+      const row = document.createElement('div'); row.className='item';
+      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
+      row.appendChild(date); row.appendChild(title); c2.appendChild(row);
+    }
+  }catch(e){
+    // ignore
+  }
+}
+loadTodo(); setInterval(loadTodo, 20*1000);
+
+// ===== Home Assistant 제어 패널 =====
+let haDevices = [];
+const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'', dashboardTitle:'' };
+
+function renderHomeControls(){
+  const grid = document.getElementById('ha-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+
+  const heading = document.querySelector('.home h3');
+  if(heading){
+    heading.textContent = haDevicesState.dashboardTitle ? `Home Control · ${haDevicesState.dashboardTitle}` : 'Home Control';
+  }
+
+  const statuses = [];
+  if(haDevicesState.needConfig){
+    statuses.push(haDevicesState.message || 'Home Assistant 연동 설정이 필요합니다.');
+  }
+  if(haDevicesState.fetchError){
+    statuses.push('불러오기 오류: ' + haDevicesState.fetchError);
+  }
+  if(haDevicesState.commandError){
+    statuses.push('명령 실패: ' + haDevicesState.commandError);
+  }
+  if(!haDevicesState.needConfig && !haDevicesState.fetchError && haDevicesState.message){
+    statuses.push(haDevicesState.message);
+  }
+  if(!haDevicesState.loading && !haDevicesState.needConfig && !haDevicesState.fetchError && haDevices.length === 0){
+    statuses.push('표시할 기기가 없습니다.');
+  }
+
+  statuses.filter(Boolean).forEach(text => {
+    const msg = document.createElement('div');
+    msg.className = 'ha-status';
+    msg.textContent = text;
+    grid.appendChild(msg);
+  });
+
+  if(haDevicesState.needConfig){
+    return;
+  }
+  if(haDevicesState.fetchError && haDevices.length === 0){
+    return;
+  }
+
+  haDevices.forEach(dev => {
+    const item = document.createElement('div');
+    const isOn = dev.state && dev.state.on === true;
+    const isOnline = dev.online !== false;
+    const canToggle = dev.can_toggle === true && isOnline;
+    const isPending = dev.pending === true;
+    item.className = 'ha-device' + (isOn ? ' on' : '');
+    if(!isOnline) item.className += ' offline';
+    if(!canToggle) item.className += ' disabled';
+    if(isPending) item.className += ' pending';
+    item.dataset.id = dev.id || '';
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-pressed', String(!!isOn));
+    const tooltip = [dev.name || dev.id || '', dev.room || '', dev.state_label || ''].filter(Boolean).join(' · ');
+    if(tooltip) item.title = tooltip;
+
+    const icon = document.createElement('div');
+    icon.className = 'icon';
+    icon.textContent = dev.icon || '🔘';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    const room = dev.room ? ` · ${dev.room}` : '';
+    name.textContent = (dev.name || dev.id || '기기') + room;
+
+    const state = document.createElement('div');
+    state.className = 'state';
+    if(!isPending && isOnline){
+      state.classList.add(isOn ? 'on' : 'off');
+    }
+    state.textContent = isPending ? '동작 중…' : (dev.state_label || (isOn ? '켜짐' : '꺼짐'));
+
+    meta.appendChild(name);
+    meta.appendChild(state);
+
+    item.appendChild(icon);
+    item.appendChild(meta);
+
+    if(canToggle){
+      item.addEventListener('click', () => toggleHADevice(dev));
+    }
+
+    grid.appendChild(item);
+  });
+}
+
+async function loadHomeDevices(){
+  haDevicesState.loading = true;
+  haDevicesState.fetchError = '';
+  haDevicesState.message = '';
+  renderHomeControls();
+  try{
+    const r = await fetch('/api/home-devices');
+    if(!r.ok){
+      throw new Error('HTTP ' + r.status);
+    }
+    const data = await r.json();
+    haDevicesState.dashboardTitle = data.dashboard && data.dashboard.title ? data.dashboard.title : '';
+    if(data.need_config){
+      haDevices = [];
+      haDevicesState.needConfig = true;
+      haDevicesState.message = data.message || 'Home Assistant 연동을 설정하세요.';
+      haDevicesState.dashboardTitle = '';
+      return;
+    }
+    haDevicesState.needConfig = false;
+    haDevicesState.commandError = '';
+    if(data.error){
+      throw new Error(data.error);
+    }
+    haDevices = Array.isArray(data.devices) ? data.devices : [];
+    if(data.message){
+      haDevicesState.message = data.message;
+    }
+  }catch(e){
+    haDevices = [];
+    haDevicesState.fetchError = (e && e.message) ? e.message : '알 수 없는 오류';
+    haDevicesState.dashboardTitle = '';
+  }finally{
+    haDevicesState.loading = false;
+    renderHomeControls();
+  }
+}
+
+async function toggleHADevice(dev){
+  if(!dev || dev.pending || dev.can_toggle !== true || dev.online === false){
+    return;
+  }
+  const desired = !(dev.state && dev.state.on === true);
+  dev.pending = true;
+  dev.state = Object.assign({}, dev.state, { on: desired });
+  dev.state_label = desired ? '켜짐' : '꺼짐';
+  renderHomeControls();
+  try{
+    const r = await fetch(`/api/home-devices/${encodeURIComponent(dev.id)}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: desired })
+    });
+    if(!r.ok){
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.error || ('HTTP ' + r.status));
+    }
+    haDevicesState.commandError = '';
+  }catch(e){
+    haDevicesState.commandError = (e && e.message) ? e.message : '실행 실패';
+  }finally{
+    dev.pending = false;
+    await loadHomeDevices();
+  }
+}
+
+loadHomeDevices();
+setInterval(loadHomeDevices, 30*1000);
+
+async function refreshBus(){
+  try{
+    const r = await fetch('/api/bus');
+    if(!r.ok) return;
+    const data = await r.json();
+    const titleEl = document.getElementById('bus-title');
+    if(titleEl) titleEl.textContent = data.title || '버스도착';
+    const stopEl = document.getElementById('bus-stop');
+    if(stopEl) stopEl.textContent = data.stop || '';
+
+    const left = document.getElementById('bus-left');
+    const right = document.getElementById('bus-right');
+    if(!left || !right) return;
+
+    left.innerHTML='';
+    right.innerHTML='';
+
+    const rows = data.rows || [];
+    if(!rows.length){
+      left.textContent = '정보 없음';
+      return;
+    }
+    if(rows.length===1 && rows[0].text && !rows[0].route){
+      left.textContent = rows[0].text;
+      return;
+    }
+    const mid = Math.ceil(rows.length/2);
+    rows.slice(0, mid).forEach(it=>{
+      const row=document.createElement('div');
+      row.className='item';
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.hops}</div><div class="msg">${it.eta}</div>`;
+      left.appendChild(row);
+    });
+    rows.slice(mid).forEach(it=>{
+      const row=document.createElement('div');
+      row.className='item';
+      row.innerHTML=`<div class="rt">${it.route}</div><div class="hops">${it.hops}</div><div class="msg">${it.eta}</div>`;
+      right.appendChild(row);
+    });
+  }catch(e){}
+}
+refreshBus();
+setInterval(refreshBus,60000);
+
+// ===== Background photo crossfade (delay-optimized & path-safe) =====
+// - /api/photos 목록 셔플
+// - 세그먼트별 URL 인코딩(하위 폴더 유지)
+// - Image().decode()로 미리 디코드 후 전환
+// - 초기 한 장은 화면에 바로 세팅하고 큐에서 소비 → 첫 전환 즉시 다른 사진
+// - 탭 비활성화 시 타이머 일시중지
+
+let photoList = [];
+let pi = 0;           // 사진 인덱스
+let front = 1;        // 현재 보이는 레이어: 1=bg1, 2=bg2
+
+const DISPLAY_INTERVAL_MS = 5000;
+const PRELOAD_MIN_COUNT   = 2;
+const PRELOAD_COOLDOWN_MS = 250;
+
+let preloadQueue = [];     // [{ url, readyAt }]
+let isPreloading = false;
+let nextSwitchAt = 0;
+let slideTimer = null;
+let refillTimer = null;
+
+// --- 유틸: 세그먼트별 인코딩(하위 폴더 유지) -------------------------------
+function buildPhotoUrl(name){
+  // "a/b c.jpg" -> "/photos/a/b%20c.jpg"
+  return '/photos/' + String(name).split('/').map(encodeURIComponent).join('/');
+}
+
+// --- 유틸: 배열 셔플 -------------------------------------------------------
+function shuffle(arr){
+  for (let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// --- 목록 로드 --------------------------------------------------------------
+async function loadPhotos(){
+  try{
+    const r = await fetch('/api/photos');
+    photoList = await r.json();
+    shuffle(photoList);
+  }catch(e){
+    console.error('[photos] load failed:', e);
+    photoList = [];
+  }
+}
+
+// --- 이미지 1장 프리로드(+decode) -----------------------------------------
+function preloadOne(url){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    let done = false;
+    const finish = ok => { if (!done){ done = true; resolve(ok ? img : null); } };
+    img.onload = ()=>{
+      if (img.decode){
+        img.decode().then(()=>finish(true)).catch(()=>finish(true));
+      }else{
+        finish(true);
+      }
+    };
+    img.onerror = ()=> finish(null);
+    img.src = url;
+  });
+}
+
+// --- 프리로드 큐 보충 ------------------------------------------------------
+async function ensurePreloaded(){
+  if (isPreloading) return;
+  isPreloading = true;
+  try{
+    while (preloadQueue.length < PRELOAD_MIN_COUNT && photoList.length){
+      const name = photoList[pi % photoList.length]; pi++;
+      const url  = buildPhotoUrl(name);
+      const ok   = await preloadOne(url);
+      if (ok){
+        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS });
+      }
+    }
+  }finally{
+    isPreloading = false;
+  }
+}
+
+// --- 실제 전환 --------------------------------------------------------------
+function swapBackground(nextUrl){
+  const incoming = document.getElementById(front === 1 ? 'bg2' : 'bg1'); // 들어올 레이어(현재 투명)
+  incoming.style.backgroundImage = `url("${nextUrl}")`;
+  // reflow
+  incoming.offsetHeight;
+  incoming.style.opacity = 1;
+
+  const outgoing = document.getElementById(front === 1 ? 'bg1' : 'bg2'); // 나갈 레이어(현재 보임)
+  outgoing.style.opacity = 0;
+
+  front = 3 - front;
+}
+
+// --- 한 스텝 전환 ----------------------------------------------------------
+async function showNextPhoto(){
+  if (!photoList.length) return;
+
+  await ensurePreloaded();
+  if (!preloadQueue.length) return;
+
+  const now = Date.now();
+  if (now < nextSwitchAt) return;
+
+  const { url, readyAt } = preloadQueue[0];
+  if (now < readyAt) return;
+
+  preloadQueue.shift();
+  swapBackground(url);
+  nextSwitchAt = now + DISPLAY_INTERVAL_MS;
+
+  // 백그라운드 프리로드
+  ensurePreloaded();
+}
+
+// --- 타이머 컨트롤/가시성 대응 --------------------------------------------
+function stopPhotoTimers(){
+  if (slideTimer){ clearInterval(slideTimer); slideTimer = null; }
+  if (refillTimer){ clearInterval(refillTimer); refillTimer = null; }
+}
+function startPhotoTimers(){
+  if (!slideTimer){
+    slideTimer = setInterval(showNextPhoto, DISPLAY_INTERVAL_MS);
+  }
+  if (!refillTimer){
+    refillTimer = setInterval(async ()=>{
+      if (!photoList.length){
+        await loadPhotos();
+      }
+      ensurePreloaded();
+    }, 60 * 1000);
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden){
+    stopPhotoTimers();
+  }else{
+    nextSwitchAt = Date.now();
+    startPhotoTimers();
+  }
+});
+
+// --- 초기화(IIFE) -----------------------------------------------------------
+(async ()=>{
+  stopPhotoTimers();
+
+  await loadPhotos();
+  if (!photoList.length){
+    return;
+  }
+
+  await ensurePreloaded();
+
+  const b1 = document.getElementById('bg1');
+  const b2 = document.getElementById('bg2');
+
+  // 초기 1장 화면 세팅(큐에서 소비)
+  if (preloadQueue[0]){
+    const first = preloadQueue.shift();
+    b1.style.backgroundImage = `url("${first.url}")`;
+    b1.style.opacity = 1;
+    b2.style.opacity = 0;
+    front = 1;
+    nextSwitchAt = Date.now() + DISPLAY_INTERVAL_MS;
+  }
+
+  // 다음 전환용으로 숨김 레이어 미리 세팅(있다면)
+  if (preloadQueue[0]){
+    b2.style.backgroundImage = `url("${preloadQueue[0].url}")`;
+  }
+
+  startPhotoTimers();
+  showNextPhoto(); // 준비됐으면 바로 1회 시도
+})();
+</script>
+</body>
+</html>
