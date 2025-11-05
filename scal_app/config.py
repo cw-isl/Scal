@@ -1,4 +1,4 @@
-"""Configuration, state persistence, and embedded block helpers."""
+"""Configuration, state persistence, and configuration file helpers."""
 
 from __future__ import annotations
 
@@ -12,46 +12,23 @@ from typing import Any, Dict
 
 LOGGER = logging.getLogger(__name__)
 
-CFG_START = "# ==== EMBEDDED_CONFIG (JSON) START"
-CFG_END = "# ==== EMBEDDED_CONFIG (JSON) END"
-VER_START = "# ==== EMBEDDED_VERSES START"
-VER_END = "# ==== EMBEDDED_VERSES END"
-
 BASE = Path(os.environ.get("SCAL_DATA_DIR", "/root/scal")).expanduser()
 STATE_PATH = BASE / "sframe_state.json"
 PHOTOS_DIR = BASE / "frame_photos"
 GCLIENT_PATH = BASE / "google_client_secret.json"
 GTOKEN_PATH = BASE / "google_token.json"
+CONFIG_PATH = Path(os.environ.get("SCAL_CONFIG_FILE", BASE / "config.yaml")).expanduser()
+VERSE_PATH = Path(os.environ.get("SCAL_VERSE_FILE", BASE / "verse.txt")).expanduser()
 
 BASE.mkdir(parents=True, exist_ok=True)
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
-CONFIG_SOURCE = Path(
-    os.environ.get("SCAL_CONFIG_SOURCE", "Scal/scal_full_integrated.py")
-).resolve()
-
 
 def set_config_source(path: Path) -> None:
-    """Set the python source file that stores embedded configuration blocks."""
-    global CONFIG_SOURCE
-    CONFIG_SOURCE = Path(path).resolve()
+    """Set the configuration file location (kept for backward compatibility)."""
 
-
-def _extract_block(src_text: str, start_tag: str, end_tag: str):
-    s = src_text.find(start_tag)
-    e = src_text.find(end_tag)
-    if s == -1 or e == -1 or e <= s:
-        raise RuntimeError(f"Marker not found: {start_tag}..{end_tag}")
-    s_body = src_text.find("\n", s) + 1
-    e_body = e
-    return s_body, e_body, src_text[s_body:e_body]
-
-
-def _replace_block_in_text(src_text: str, start_tag: str, end_tag: str, new_body: str) -> str:
-    s_body, e_body, _old = _extract_block(src_text, start_tag, end_tag)
-    if not new_body.endswith("\n"):
-        new_body += "\n"
-    return src_text[:s_body] + new_body + src_text[e_body:]
+    global CONFIG_PATH
+    CONFIG_PATH = Path(path).expanduser()
 
 
 def _atomic_write(path: Path, data: str) -> None:
@@ -65,44 +42,73 @@ def _atomic_write(path: Path, data: str) -> None:
     os.replace(tmp_path, path)
 
 
-def _read_block(start_tag: str, end_tag: str, file_path: Path | None = None) -> str:
-    file_path = file_path or CONFIG_SOURCE
-    with open(file_path, "r", encoding="utf-8") as handle:
-        src = handle.read()
-    _, _, body = _extract_block(src, start_tag, end_tag)
-    import re as _re
+def _load_structured(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        LOGGER.warning("Failed to read config file: %%s", path, exc_info=True)
+        return {}
+    if not text.strip():
+        return {}
+    try:
+        import yaml  # type: ignore
 
-    match = _re.search(r'r?"""\s*([\s\S]*?)\s*"""', body)
-    return match.group(1) if match else body
+        loaded = yaml.safe_load(text)  # type: ignore[attr-defined]
+        if loaded is None:
+            return {}
+        if not isinstance(loaded, dict):
+            raise TypeError("Configuration file must contain a mapping at the top level")
+        return loaded
+    except ModuleNotFoundError:
+        LOGGER.debug("PyYAML not available, falling back to JSON parsing for config file")
+    except Exception:
+        LOGGER.warning("Failed to parse config file as YAML; attempting JSON", exc_info=True)
+    try:
+        loaded = json.loads(text)
+        if isinstance(loaded, dict):
+            return loaded
+        raise TypeError("Configuration JSON must be an object")
+    except Exception:
+        LOGGER.error("Failed to parse configuration file; using defaults", exc_info=True)
+        return {}
 
 
-def _write_block(new_text: str, start_tag: str, end_tag: str, file_path: Path | None = None):
-    file_path = file_path or CONFIG_SOURCE
-    with open(file_path, "r", encoding="utf-8") as handle:
-        src = handle.read()
-    varname = "EMBEDDED_CONFIG" if "CONFIG" in start_tag else "EMBEDDED_VERSES"
-    wrapped = varname + ' = r"""' + new_text + '"""'
-    _atomic_write(file_path, _replace_block_in_text(src, start_tag, end_tag, wrapped))
+def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in updates.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            base[key] = _deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
 
 
-def load_config_from_embedded(defaults: Dict[str, Any]) -> Dict[str, Any]:
-    data = json.loads(_read_block(CFG_START, CFG_END) or "{}")
-
-    def deep_fill(dst: Dict[str, Any], src: Dict[str, Any]):
-        for key, value in src.items():
-            if key not in dst:
-                dst[key] = value
-            elif isinstance(value, dict):
-                dst[key] = deep_fill(dst.get(key, {}) or {}, value)
-        return dst
-
-    return deep_fill(data, defaults)
+def load_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
+    loaded = _load_structured(CONFIG_PATH)
+    if not loaded:
+        return defaults.copy()
+    merged = defaults.copy()
+    return _deep_update(merged, loaded)
 
 
 def save_config_to_source(new_data: Dict[str, Any], file_path: Path | None = None):
-    file_path = file_path or CONFIG_SOURCE
-    json_text = json.dumps(new_data, ensure_ascii=False, indent=2)
-    _write_block(json_text, CFG_START, CFG_END, file_path=file_path)
+    file_path = Path(file_path) if file_path else CONFIG_PATH
+    try:
+        import yaml  # type: ignore
+
+        text = yaml.safe_dump(  # type: ignore[attr-defined]
+            new_data,
+            allow_unicode=True,
+            sort_keys=True,
+        )
+    except ModuleNotFoundError:
+        LOGGER.debug("PyYAML not available; writing config as JSON")
+        text = json.dumps(new_data, ensure_ascii=False, indent=2)
+    except Exception:
+        LOGGER.warning("Failed to dump config as YAML; falling back to JSON", exc_info=True)
+        text = json.dumps(new_data, ensure_ascii=False, indent=2)
+    _atomic_write(file_path, text)
 
 
 DEFAULT_CFG: Dict[str, Any] = {
@@ -121,10 +127,6 @@ DEFAULT_CFG: Dict[str, Any] = {
         "webhook_base": "",
         "path_secret": "",
     },
-    "google": {
-        "scopes": ["https://www.googleapis.com/auth/calendar.events"],
-        "calendar": {"id": "primary"},
-    },
     "home_assistant": {
         "base_url": "http://localhost:8123",
         "token": "",
@@ -134,31 +136,31 @@ DEFAULT_CFG: Dict[str, Any] = {
         "include_entities": [],
         "dashboard": {"url_path": "", "title": ""},
     },
-    "todoist": {
-        "api_token": "",
-        "filter": "today | overdue",
-        "project_id": "",
-        "max_items": 20,
-    },
     "bus": {"city_code": "", "node_id": "", "key": ""},
+    "photos": {"album": "default"},
 }
 
-CFG: Dict[str, Any] = load_config_from_embedded(DEFAULT_CFG)
+CFG: Dict[str, Any] = load_config(DEFAULT_CFG)
 
-TZ = timezone(timedelta(hours=9)) if CFG["frame"]["tz"] == "Asia/Seoul" else timezone.utc
-TZ_NAME = "Asia/Seoul" if CFG["frame"]["tz"] == "Asia/Seoul" else "UTC"
+TZ = timezone(timedelta(hours=9)) if CFG["frame"].get("tz") == "Asia/Seoul" else timezone.utc
+TZ_NAME = "Asia/Seoul" if CFG["frame"].get("tz") == "Asia/Seoul" else "UTC"
 
 
 def get_verse() -> str:
-    return _read_block(VER_START, VER_END).strip()
+    if VERSE_PATH.exists():
+        try:
+            return VERSE_PATH.read_text(encoding="utf-8").strip()
+        except Exception:
+            LOGGER.warning("Failed to read verse file", exc_info=True)
+    return ""
 
 
 def set_verse(text: str) -> None:
-    _write_block((text or "").strip(), VER_START, VER_END)
+    value = (text or "").strip()
     try:
-        (BASE / "verse.txt").write_text((text or "").strip() + "\n", encoding="utf-8")
-    except Exception as exc:  # pragma: no cover - best effort persistence
-        LOGGER.debug("Failed to mirror verse.txt: %s", exc)
+        _atomic_write(VERSE_PATH, value + ("\n" if value else ""))
+    except Exception:
+        LOGGER.warning("Failed to store verse", exc_info=True)
 
 
 def load_state() -> Dict[str, Any]:

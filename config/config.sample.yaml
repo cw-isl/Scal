@@ -1,0 +1,34 @@
+server:
+  port: 5320
+frame:
+  tz: Asia/Seoul
+  ical_url: ""
+weather:
+  provider: openweathermap
+  api_key: ""
+  location: Seoul, KR
+  units: metric
+telegram:
+  bot_token: ""
+  allowed_user_ids: []
+  mode: polling
+  webhook_base: ""
+  path_secret: ""
+home_assistant:
+  base_url: http://localhost:8123
+  token: ""
+  verify_ssl: true
+  timeout: 5
+  include_domains:
+    - light
+    - switch
+  include_entities: []
+  dashboard:
+    url_path: ""
+    title: ""
+bus:
+  city_code: ""
+  node_id: ""
+  key: ""
+photos:
+  album: default
