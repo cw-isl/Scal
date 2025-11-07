@@ -17,6 +17,7 @@ import html
 import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
 import telebot
 
 logging.basicConfig(
@@ -38,7 +39,7 @@ from scal_app.config import (
 )
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
-from scal_app.templates import load_board_html
+from scal_app.templates import load_board_html, load_settings_html
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
 _ical_cache = {"url": None, "ts": 0.0, "events": []}
@@ -630,6 +631,63 @@ def list_local_images():
             files.append(str(p.relative_to(PHOTOS_DIR)))
     return files
 
+
+def _settings_snapshot() -> Dict[str, Any]:
+    frame_cfg = CFG.get("frame", {}) or {}
+    ha_cfg = CFG.get("home_assistant", {}) or {}
+    bus_cfg = CFG.get("bus", {}) or {}
+    weather_cfg = CFG.get("weather", {}) or {}
+    tg_cfg = CFG.get("telegram", {}) or {}
+    allowed_ids = tg_cfg.get("allowed_user_ids") or []
+    allowed_text = ", ".join(str(x) for x in allowed_ids)
+    return {
+        "frame": {"ical_url": frame_cfg.get("ical_url", "")},
+        "home_assistant": {
+            "base_url": ha_cfg.get("base_url", ""),
+            "token": ha_cfg.get("token", ""),
+        },
+        "bus": {
+            "key": bus_cfg.get("key", ""),
+            "city_code": bus_cfg.get("city_code", ""),
+            "node_id": bus_cfg.get("node_id", ""),
+        },
+        "weather": {
+            "api_key": weather_cfg.get("api_key", ""),
+            "location": weather_cfg.get("location", ""),
+        },
+        "telegram": {
+            "bot_token": tg_cfg.get("bot_token", ""),
+            "allowed_user_ids": allowed_ids,
+            "allowed_user_ids_text": allowed_text,
+        },
+        "verse": {"text": get_verse()},
+    }
+
+
+def _parse_allowed_ids(raw: str) -> List[int]:
+    raw = (raw or "").strip()
+    if not raw:
+        return []
+    parts = re.split(r"[\s,]+", raw)
+    result: List[int] = []
+    for part in parts:
+        if not part:
+            continue
+        try:
+            result.append(int(part))
+        except ValueError as exc:
+            raise ValueError(f"숫자 ID만 입력하세요: '{part}'") from exc
+    return result
+
+
+def _is_safe_photo_path(path: Path) -> bool:
+    try:
+        return Path(path).resolve().is_relative_to(PHOTOS_DIR.resolve())  # type: ignore[attr-defined]
+    except AttributeError:
+        resolved_dir = PHOTOS_DIR.resolve()
+        resolved_path = Path(path).resolve()
+        return str(resolved_path).startswith(str(resolved_dir))
+
 # === [SECTION: Flask app / session / proxy headers] ==========================
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -641,12 +699,116 @@ app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE="None")
 def api_verse():
     return jsonify({"text": get_verse()})
 
+
+@app.post("/api/verse")
+def api_set_verse():
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get("text") or "").strip()
+    try:
+        set_verse(text)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"success": True, "verse": {"text": get_verse()}})
+
 # === [SECTION: REST API endpoints used by the board HTML] ====================
 @app.get("/api/todo")
 def api_todo():
     """Return an empty Todo list placeholder for the board UI."""
 
     return jsonify({"items": []})
+
+
+# === [SECTION: Settings management endpoints] ================================
+@app.get("/api/settings")
+def api_get_settings():
+    return jsonify(_settings_snapshot())
+
+
+@app.post("/api/settings")
+def api_update_settings():
+    payload = request.get_json(silent=True) or {}
+    errors: List[str] = []
+    updated = False
+
+    try:
+        if "frame" in payload:
+            ical = (payload["frame"].get("ical_url") or "").strip()
+            if ical and not re.match(r"^https?://", ical, re.IGNORECASE):
+                errors.append("iCal URL은 http:// 또는 https:// 로 시작해야 합니다.")
+            else:
+                CFG.setdefault("frame", {})["ical_url"] = ical
+                updated = True
+
+        if "home_assistant" in payload:
+            section = payload["home_assistant"] or {}
+            base = (section.get("base_url") or "").strip()
+            token = (section.get("token") or "").strip()
+            if base and not re.match(r"^https?://", base, re.IGNORECASE):
+                errors.append("Home Assistant URL은 http:// 또는 https:// 로 시작해야 합니다.")
+            else:
+                CFG.setdefault("home_assistant", {})["base_url"] = _normalize_base_url(base)
+                CFG.setdefault("home_assistant", {})["token"] = token
+                updated = True
+
+        if "bus" in payload:
+            section = payload["bus"] or {}
+            CFG.setdefault("bus", {})["key"] = (section.get("key") or "").strip()
+            CFG.setdefault("bus", {})["city_code"] = (section.get("city_code") or "").strip()
+            CFG.setdefault("bus", {})["node_id"] = (section.get("node_id") or "").strip()
+            updated = True
+
+        if "weather" in payload:
+            section = payload["weather"] or {}
+            CFG.setdefault("weather", {})["api_key"] = (section.get("api_key") or "").strip()
+            CFG.setdefault("weather", {})["location"] = (section.get("location") or "").strip()
+            updated = True
+
+        if "telegram" in payload:
+            section = payload["telegram"] or {}
+            bot_token = (section.get("bot_token") or "").strip()
+            try:
+                allowed = _parse_allowed_ids(section.get("allowed_user_ids", ""))
+            except ValueError as exc:
+                errors.append(str(exc))
+            else:
+                cfg = CFG.setdefault("telegram", {})
+                cfg["bot_token"] = bot_token
+                cfg["allowed_user_ids"] = allowed
+                global ALLOWED
+                ALLOWED = set(allowed)
+                updated = True
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if errors:
+        return jsonify({"error": "\n".join(errors)}), 400
+
+    if updated:
+        save_config_to_source(CFG)
+
+    return jsonify({"success": True, "config": _settings_snapshot()})
+
+
+@app.get("/api/bus/search")
+def api_bus_search():
+    keyword = (request.args.get("keyword") or "").strip()
+    if not keyword:
+        return jsonify({"results": []})
+    city = (request.args.get("city") or CFG.get("bus", {}).get("city_code") or "").strip()
+    service_key = (request.args.get("service_key") or CFG.get("bus", {}).get("key") or "").strip()
+    if not city:
+        return jsonify({"error": "도시 코드를 먼저 입력하세요."}), 400
+    if not service_key:
+        return jsonify({"error": "TAGO 서비스키가 필요합니다."}), 400
+    try:
+        results = bus_search_stops(city, keyword, service_key, limit=12)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+    payload = [
+        {"name": name, "ars": ars, "node_id": node}
+        for name, ars, node in results
+    ]
+    return jsonify({"results": payload})
 
 @app.get("/api/events")
 def api_events():
@@ -683,6 +845,44 @@ def api_air():
 @app.get("/api/photos")
 def api_photos():
     return jsonify(list_local_images())
+
+
+@app.post("/api/photos/upload")
+def api_photos_upload():
+    if "photo" not in request.files:
+        return jsonify({"error": "사진 파일을 선택해주세요."}), 400
+    file = request.files["photo"]
+    if not file or not file.filename:
+        return jsonify({"error": "파일 이름을 확인해주세요."}), 400
+    filename = secure_filename(file.filename)
+    ext = Path(filename).suffix.lower()
+    allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    if ext not in allowed_exts:
+        return jsonify({"error": "지원하지 않는 파일 형식입니다."}), 400
+    ts = datetime.now(TZ).strftime("%Y%m%d_%H%M%S")
+    new_name = f"web_{ts}_{secrets.token_hex(3)}{ext}"
+    dest = PHOTOS_DIR / new_name
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        file.save(dest)
+    except Exception as exc:
+        return jsonify({"error": f"업로드 실패: {exc}"}), 500
+    return jsonify({"success": True, "filename": new_name})
+
+
+@app.delete("/api/photos/<path:fname>")
+def api_delete_photo(fname: str):
+    target = PHOTOS_DIR / fname
+    if not _is_safe_photo_path(target):
+        return jsonify({"error": "잘못된 경로입니다."}), 400
+    try:
+        if not target.exists():
+            return jsonify({"error": "파일을 찾을 수 없습니다."}), 404
+        target.unlink()
+    except Exception as exc:
+        return jsonify({"error": f"삭제 실패: {exc}"}), 500
+    return jsonify({"success": True})
+
 
 @app.get("/photos/<path:fname>")
 def serve_photo(fname):
@@ -751,6 +951,11 @@ def api_home_devices_execute(device_id: str):
 @app.get("/board")
 def board():
     return render_template_string(load_board_html())
+
+
+@app.get("/settings")
+def settings_page():
+    return render_template_string(load_settings_html())
 
 # Bot state helpers are provided by scal_app.config.load_state/save_state
 
