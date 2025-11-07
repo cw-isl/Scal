@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>스마트 프레임 설정</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background:#f5f6f8;
+    color:#111;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0;
+    background:linear-gradient(180deg,#f8f9fb 0%, #eef1f6 100%);
+    min-height:100vh;
+  }
+  .container {
+    max-width:880px;
+    margin:40px auto;
+    padding:0 20px 60px;
+    display:flex;
+    flex-direction:column;
+    gap:26px;
+  }
+  header {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  header h1 {
+    margin:0;
+    font-size:32px;
+    font-weight:700;
+  }
+  header p {
+    margin:0;
+    font-size:15px;
+    color:#444;
+  }
+  .cards {
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+  .card {
+    background:#fff;
+    border-radius:16px;
+    padding:22px 24px;
+    box-shadow:0 14px 28px rgba(15,35,95,0.08);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .card h2 {
+    margin:0;
+    font-size:20px;
+    font-weight:700;
+    color:#111;
+  }
+  form {
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .field {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .field label {
+    font-size:14px;
+    color:#333;
+    font-weight:600;
+  }
+  .input-row {
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+  .input-row input[type="text"],
+  .input-row input[type="url"],
+  .input-row input[type="password"],
+  .input-row textarea {
+    flex:1 1 auto;
+    border:1px solid rgba(0,0,0,0.12);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:15px;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .input-row textarea {
+    resize:vertical;
+    min-height:90px;
+  }
+  .input-row input:focus,
+  .input-row textarea:focus {
+    outline:none;
+    border-color:#4b6bff;
+    box-shadow:0 0 0 3px rgba(75,107,255,0.18);
+  }
+  button, .btn {
+    border:none;
+    background:#4b6bff;
+    color:#fff;
+    padding:10px 16px;
+    border-radius:10px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  button:hover, .btn:hover {
+    background:#3957f6;
+    box-shadow:0 10px 18px rgba(75,107,255,0.18);
+  }
+  button:active, .btn:active {
+    transform:translateY(1px);
+  }
+  .btn-secondary {
+    background:#e4e8f2;
+    color:#333;
+  }
+  .btn-secondary:hover {
+    background:#d8ddef;
+  }
+  .actions {
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .muted {
+    font-size:13px;
+    color:#666;
+  }
+  .status {
+    font-size:13px;
+    color:#2d7f2d;
+  }
+  .status.error {
+    color:#c62828;
+  }
+  .secret-toggle {
+    background:#e4e8f2;
+    color:#333;
+    border-radius:10px;
+    padding:8px 12px;
+    font-size:13px;
+  }
+  .secret-toggle:hover {
+    background:#d5d9e4;
+  }
+  .grid-two {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(280px,1fr));
+    gap:14px;
+  }
+  .bus-results {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px,1fr));
+    gap:10px;
+  }
+  .bus-result {
+    background:#f2f4fb;
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:14px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .bus-result button {
+    align-self:flex-start;
+    background:#4b6bff;
+    color:#fff;
+    font-size:12px;
+    padding:6px 10px;
+    border-radius:8px;
+  }
+  .photos-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px,1fr));
+    gap:12px;
+  }
+  .photo-item {
+    background:#f6f7fb;
+    border-radius:12px;
+    padding:10px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    align-items:stretch;
+  }
+  .photo-item img {
+    width:100%;
+    height:120px;
+    object-fit:cover;
+    border-radius:8px;
+  }
+  .photo-item .name {
+    font-size:13px;
+    color:#333;
+    word-break:break-all;
+  }
+  .photo-item .actions {
+    display:flex;
+    gap:8px;
+  }
+  .photo-item .actions button {
+    flex:1 1 auto;
+    padding:8px;
+    font-size:13px;
+  }
+  footer {
+    text-align:center;
+    font-size:12px;
+    color:#777;
+    margin-top:30px;
+  }
+  @media (max-width:560px) {
+    .card { padding:18px; }
+    header h1 { font-size:26px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Smart Frame 설정</h1>
+    <p>텔레그램에서만 가능했던 설정을 이 페이지에서 한눈에 관리하세요.</p>
+  </header>
+  <div class="cards">
+    <section class="card" id="calendar-card">
+      <h2>캘린더</h2>
+      <form data-section="frame">
+        <div class="field">
+          <label for="ical-url">iCal URL</label>
+          <div class="input-row">
+            <input id="ical-url" name="ical_url" type="url" placeholder="https://example.com/calendar.ics"/>
+          </div>
+          <p class="muted">Google 캘린더 또는 iCal 주소를 입력하면 월간 일정이 보드에 표시됩니다.</p>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="home-card">
+      <h2>Home Assistant</h2>
+      <form data-section="home_assistant">
+        <div class="field">
+          <label for="ha-base">베이스 URL</label>
+          <div class="input-row">
+            <input id="ha-base" name="base_url" type="url" placeholder="https://your-ha.duckdns.org"/>
+          </div>
+        </div>
+        <div class="field">
+          <label for="ha-token">장기 토큰</label>
+          <div class="input-row">
+            <input id="ha-token" name="token" type="password" autocomplete="new-password" placeholder="Home Assistant Long-Lived Token"/>
+            <button type="button" class="secret-toggle" data-toggle="ha-token">보기</button>
+          </div>
+          <p class="muted">토큰은 <strong>사용자 프로필 &gt; Long-Lived Access Tokens</strong>에서 생성합니다.</p>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="bus-card">
+      <h2>버스 도착 정보</h2>
+      <form data-section="bus">
+        <div class="grid-two">
+          <div class="field">
+            <label for="bus-key">TAGO 서비스 키</label>
+            <div class="input-row">
+              <input id="bus-key" name="key" type="password" placeholder="서비스키"/>
+              <button type="button" class="secret-toggle" data-toggle="bus-key">보기</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="bus-city">도시 코드</label>
+            <div class="input-row">
+              <input id="bus-city" name="city_code" type="text" placeholder="예: 25"/>
+            </div>
+          </div>
+          <div class="field">
+            <label for="bus-node">정류소 node ID</label>
+            <div class="input-row">
+              <input id="bus-node" name="node_id" type="text" placeholder="정류소 nodeId"/>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>정류소 검색</label>
+          <div class="input-row">
+            <input id="bus-search-keyword" type="text" placeholder="정류소명을 입력하세요"/>
+            <button type="button" class="btn" data-action="bus-search">검색</button>
+          </div>
+          <p class="muted">서비스키와 도시 코드를 입력한 뒤 정류소명을 검색하면 node ID를 선택할 수 있습니다.</p>
+        </div>
+        <div class="bus-results" id="bus-results" hidden></div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="weather-card">
+      <h2>날씨</h2>
+      <form data-section="weather">
+        <div class="field">
+          <label for="weather-key">OpenWeather API 키</label>
+          <div class="input-row">
+            <input id="weather-key" name="api_key" type="password" placeholder="API Key"/>
+            <button type="button" class="secret-toggle" data-toggle="weather-key">보기</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="weather-location">위치</label>
+          <div class="input-row">
+            <input id="weather-location" name="location" type="text" placeholder="Seoul, South Korea"/>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="telegram-card">
+      <h2>텔레그램</h2>
+      <form data-section="telegram">
+        <div class="field">
+          <label for="tg-token">봇 토큰</label>
+          <div class="input-row">
+            <input id="tg-token" name="bot_token" type="password" placeholder="123456:ABC..."/>
+            <button type="button" class="secret-toggle" data-toggle="tg-token">보기</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="tg-ids">허용 사용자 ID</label>
+          <div class="input-row">
+            <input id="tg-ids" name="allowed_user_ids" type="text" placeholder="예: 12345678, 987654321"/>
+          </div>
+          <p class="muted">쉼표 또는 줄바꿈으로 여러 Telegram user ID를 입력하세요. 비워두면 모두 허용됩니다.</p>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="verse-card">
+      <h2>오늘의 한마디</h2>
+      <form data-section="verse">
+        <div class="field">
+          <label for="verse-text">문구</label>
+          <div class="input-row">
+            <textarea id="verse-text" name="text" placeholder="따뜻한 문장을 입력하세요"></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="photos-card">
+      <h2>사진 관리</h2>
+      <div class="field">
+        <label for="photo-upload">사진 업로드</label>
+        <div class="input-row">
+          <input id="photo-upload" type="file" accept="image/*"/>
+          <button type="button" class="btn" data-action="upload-photo">업로드</button>
+        </div>
+        <p class="muted">JPG, PNG, WEBP, GIF 파일을 업로드하면 보드 배경으로 자동 교체됩니다.</p>
+      </div>
+      <div class="photos-grid" id="photos-grid"></div>
+      <div class="actions">
+        <button type="button" class="btn-secondary" data-action="refresh-photos">목록 새로고침</button>
+        <span class="status" hidden></span>
+      </div>
+    </section>
+  </div>
+  <footer>© Smart Frame</footer>
+</div>
+<script>
+const state = {
+  config: null,
+};
+
+function encodePhotoPath(name) {
+  return name.split('/').map(encodeURIComponent).join('/');
+}
+
+function setStatus(section, message, isError=false) {
+  const card = document.querySelector(section);
+  if (!card) return;
+  const span = card.querySelector('.status');
+  if (!span) return;
+  if (!message) {
+    span.hidden = true;
+    span.textContent = '';
+    span.classList.remove('error');
+    return;
+  }
+  span.hidden = false;
+  span.textContent = message;
+  span.classList.toggle('error', isError);
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) throw new Error('설정을 불러오지 못했습니다.');
+    const data = await res.json();
+    state.config = data;
+    fillFields();
+  } catch (err) {
+    console.error(err);
+    setStatus('#calendar-card', err.message || '불러오기 실패', true);
+  }
+}
+
+function fillFields() {
+  if (!state.config) return;
+  const { frame, home_assistant, bus, weather, telegram, verse } = state.config;
+  const setValue = (id, value='') => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+  if (frame) setValue('ical-url', frame.ical_url);
+  if (home_assistant) {
+    setValue('ha-base', home_assistant.base_url);
+    setValue('ha-token', home_assistant.token);
+  }
+  if (bus) {
+    setValue('bus-key', bus.key);
+    setValue('bus-city', bus.city_code);
+    setValue('bus-node', bus.node_id);
+  }
+  if (weather) {
+    setValue('weather-key', weather.api_key);
+    setValue('weather-location', weather.location);
+  }
+  if (telegram) {
+    setValue('tg-token', telegram.bot_token);
+    setValue('tg-ids', telegram.allowed_user_ids_text);
+  }
+  if (verse) {
+    setValue('verse-text', verse.text);
+  }
+}
+
+function gatherFormData(form) {
+  const data = {};
+  const formData = new FormData(form);
+  for (const [key, value] of formData.entries()) {
+    data[key] = value.trim();
+  }
+  return data;
+}
+
+async function submitSection(form) {
+  const section = form.dataset.section;
+  const payload = {};
+  if (section === 'verse') {
+    const data = gatherFormData(form);
+    try {
+      const res = await fetch('/api/verse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.text || '' })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || '저장 실패');
+      setStatus('#verse-card', '저장되었습니다.');
+    } catch (err) {
+      setStatus('#verse-card', err.message || '저장 실패', true);
+    }
+    return;
+  }
+  payload[section] = gatherFormData(form);
+  setStatus(`#${form.closest('.card').id}`, '저장 중...');
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || '저장 실패');
+    setStatus(`#${form.closest('.card').id}`, '저장되었습니다.');
+    Object.assign(state.config, body.config || {});
+    fillFields();
+  } catch (err) {
+    console.error(err);
+    setStatus(`#${form.closest('.card').id}`, err.message || '저장 실패', true);
+  }
+}
+
+function toggleSecret(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+document.querySelectorAll('form[data-section]').forEach((form) => {
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    submitSection(form);
+  });
+});
+
+Array.from(document.querySelectorAll('.secret-toggle')).forEach((btn) => {
+  btn.addEventListener('click', () => toggleSecret(btn.dataset.toggle));
+});
+
+async function searchBusStops() {
+  const keyword = document.getElementById('bus-search-keyword').value.trim();
+  const city = document.getElementById('bus-city').value.trim();
+  const key = document.getElementById('bus-key').value.trim();
+  if (!keyword) {
+    setStatus('#bus-card', '검색어를 입력하세요.', true);
+    return;
+  }
+  setStatus('#bus-card', '검색 중...');
+  try {
+    const url = new URL('/api/bus/search', window.location.origin);
+    url.searchParams.set('keyword', keyword);
+    if (city) url.searchParams.set('city', city);
+    if (key) url.searchParams.set('service_key', key);
+    const res = await fetch(url.toString());
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '검색 실패');
+    renderBusResults(body.results || []);
+    setStatus('#bus-card', body.results.length ? `${body.results.length}건을 찾았습니다.` : '검색 결과가 없습니다.');
+  } catch (err) {
+    setStatus('#bus-card', err.message || '검색 실패', true);
+  }
+}
+
+function renderBusResults(results) {
+  const wrap = document.getElementById('bus-results');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!results.length) {
+    wrap.hidden = true;
+    return;
+  }
+  results.forEach((item) => {
+    const div = document.createElement('div');
+    div.className = 'bus-result';
+    const name = document.createElement('div');
+    name.textContent = item.name;
+    const meta = document.createElement('div');
+    meta.className = 'muted';
+    meta.textContent = `ARS: ${item.ars || '-'} · nodeId: ${item.node_id}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '선택';
+    btn.addEventListener('click', () => {
+      const nodeInput = document.getElementById('bus-node');
+      if (nodeInput) nodeInput.value = item.node_id;
+      wrap.hidden = true;
+    });
+    div.appendChild(name);
+    div.appendChild(meta);
+    div.appendChild(btn);
+    wrap.appendChild(div);
+  });
+  wrap.hidden = false;
+}
+
+async function loadPhotos() {
+  try {
+    const res = await fetch('/api/photos');
+    if (!res.ok) throw new Error('목록을 불러오지 못했습니다.');
+    const photos = await res.json();
+    renderPhotos(photos || []);
+    setStatus('#photos-card', `${photos.length}개의 사진`, false);
+  } catch (err) {
+    setStatus('#photos-card', err.message || '사진 목록을 불러오지 못했습니다.', true);
+  }
+}
+
+function renderPhotos(list) {
+  const grid = document.getElementById('photos-grid');
+  grid.innerHTML = '';
+  if (!list.length) {
+    grid.innerHTML = '<p class="muted">등록된 사진이 없습니다.</p>';
+    return;
+  }
+  list.forEach((name) => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    const img = document.createElement('img');
+    img.src = `/photos/${encodePhotoPath(name)}`;
+    img.alt = name;
+    img.loading = 'lazy';
+    const title = document.createElement('div');
+    title.className = 'name';
+    title.textContent = name;
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn-secondary';
+    openBtn.textContent = '보기';
+    openBtn.addEventListener('click', () => {
+      window.open(`/photos/${encodePhotoPath(name)}`, '_blank');
+    });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.textContent = '삭제';
+    delBtn.addEventListener('click', () => deletePhoto(name));
+    actions.append(openBtn, delBtn);
+    item.append(img, title, actions);
+    grid.appendChild(item);
+  });
+}
+
+async function uploadPhoto() {
+  const input = document.getElementById('photo-upload');
+  if (!input || !input.files.length) {
+    setStatus('#photos-card', '업로드할 파일을 선택하세요.', true);
+    return;
+  }
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('photo', file);
+  setStatus('#photos-card', '업로드 중...');
+  try {
+    const res = await fetch('/api/photos/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '업로드 실패');
+    input.value = '';
+    setStatus('#photos-card', '업로드 완료!');
+    await loadPhotos();
+  } catch (err) {
+    setStatus('#photos-card', err.message || '업로드 실패', true);
+  }
+}
+
+async function deletePhoto(name) {
+  if (!confirm(`${name}\n사진을 삭제하시겠습니까?`)) return;
+  setStatus('#photos-card', '삭제 중...');
+  try {
+    const res = await fetch(`/api/photos/${encodePhotoPath(name)}`, { method: 'DELETE' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || '삭제 실패');
+    setStatus('#photos-card', '삭제되었습니다.');
+    await loadPhotos();
+  } catch (err) {
+    setStatus('#photos-card', err.message || '삭제 실패', true);
+  }
+}
+
+document.querySelector('[data-action="bus-search"]').addEventListener('click', searchBusStops);
+document.querySelector('[data-action="upload-photo"]').addEventListener('click', uploadPhoto);
+document.querySelector('[data-action="refresh-photos"]').addEventListener('click', loadPhotos);
+
+loadConfig();
+loadPhotos();
+</script>
+</body>
+</html>
