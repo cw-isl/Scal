@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """Smart Frame application with Telegram assistant and simplified features."""
 
+from __future__ import annotations
+
 # Code below is organized with clearly marked sections.
 # Search for lines like `# === [SECTION: ...] ===` to navigate.
 
@@ -18,7 +20,10 @@ import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
-import telebot
+try:  # Telegram bot integration is optional
+    import telebot
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    telebot = None  # type: ignore[assignment]
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
@@ -960,7 +965,12 @@ def settings_page():
 # Bot state helpers are provided by scal_app.config.load_state/save_state
 
 # === [SECTION: Telegram bot initialization / ACL] ============================
-TB = telebot.TeleBot(CFG["telegram"]["bot_token"]) if CFG["telegram"]["bot_token"] else None
+if telebot and CFG["telegram"].get("bot_token"):
+    TB = telebot.TeleBot(CFG["telegram"]["bot_token"])
+else:
+    if CFG["telegram"].get("bot_token") and not telebot:
+        print("[TG] pyTelegramBotAPI 미설치로 텔레그램을 비활성화합니다.")
+    TB = None
 ALLOWED = set(CFG["telegram"]["allowed_user_ids"])
 
 
@@ -1361,7 +1371,10 @@ def start_telegram():
     """Start telegram in single-instance mode using a file lock."""
     global _lock_file
     if not TB:
-        print("[TG] Telegram not configured (no bot token).")
+        if CFG["telegram"].get("bot_token") and not telebot:
+            print("[TG] pyTelegramBotAPI 미설치로 텔레그램을 비활성화합니다.")
+        else:
+            print("[TG] Telegram not configured (no bot token).")
         return
     # acquire lock file to avoid double polling
     try:
