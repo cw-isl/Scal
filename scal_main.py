@@ -1419,15 +1419,34 @@ def start_polling():
 def run_web():
     # debug=False, use_reloader=False to prevent reloader double-start
     try:
-        app.run(host="0.0.0.0", port=int(CFG["server"]["port"]), debug=False, use_reloader=False)
+        app.run(
+            host="0.0.0.0",
+            port=int(CFG["server"]["port"]),
+            debug=False,
+            use_reloader=False,
+        )
     except OSError:
         print("Address already in use")
         raise
 
+
 def main():
-    t = threading.Thread(target=run_web, daemon=True); t.start()
+    # 웹 서버 스레드는 daemon 이 아니어야 프로세스가 안 죽음
+    web_thread = threading.Thread(target=run_web, name="scal-web")
+    web_thread.start()
+
     print(f"[WEB] started on :{CFG['server']['port']}  -> /board")
-    start_telegram()
+
+    # 텔레그램은 옵션: 설정이 없으면 그냥 경고만 찍고 계속 진행
+    try:
+        start_telegram()
+    except Exception as e:
+        # 여기서 토큰 없음 등으로 에러 나도 Flask 만으로 계속 서비스
+        print(f"[TG] Telegram not configured or failed to start: {e}")
+
+    # start_telegram() 이 바로 리턴해도, 웹 스레드가 끝날 때까지 프로세스를 유지
+    web_thread.join()
+
 
 if __name__ == "__main__":
     main()
