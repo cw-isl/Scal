@@ -95,6 +95,64 @@
     resize:vertical;
     min-height:90px;
   }
+  .calendar-rows {
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .calendar-row {
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+  .calendar-row .row-label {
+    flex:0 0 86px;
+    font-size:13px;
+    font-weight:600;
+    color:#555;
+  }
+  .calendar-row .input-row {
+    flex:1 1 auto;
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+  .calendar-row .input-row input[type="url"] {
+    flex:1 1 auto;
+  }
+  .calendar-row .color-input {
+    position:absolute;
+    width:1px;
+    height:1px;
+    opacity:0;
+    pointer-events:none;
+  }
+  .calendar-row .color-chip {
+    --chip-color:#4b6bff;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    border:1px solid rgba(0,0,0,0.12);
+    background:var(--chip-color);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:rgba(255,255,255,0.95);
+    font-size:18px;
+    cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,0.12);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .calendar-row .color-chip:hover {
+    transform:scale(1.05);
+    box-shadow:0 6px 14px rgba(0,0,0,0.18);
+  }
+  .calendar-row .color-chip:active {
+    transform:scale(.97);
+  }
+  .calendar-row .color-chip .chip-icon {
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  }
   .input-row input:focus,
   .input-row textarea:focus {
     outline:none;
@@ -236,11 +294,58 @@
       <h2>캘린더</h2>
       <form data-section="frame">
         <div class="field">
-          <label for="ical-url">iCal URL</label>
-          <div class="input-row">
-            <input id="ical-url" name="ical_url" type="url" placeholder="https://example.com/calendar.ics"/>
+          <label>iCal 주소</label>
+          <div class="calendar-rows">
+            <div class="calendar-row" data-index="1">
+              <span class="row-label">캘린더 1</span>
+              <div class="input-row">
+                <input type="url" data-role="calendar-url" placeholder="https://example.com/calendar.ics"/>
+                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+              </div>
+            </div>
+            <div class="calendar-row" data-index="2">
+              <span class="row-label">캘린더 2</span>
+              <div class="input-row">
+                <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+              </div>
+            </div>
+            <div class="calendar-row" data-index="3">
+              <span class="row-label">캘린더 3</span>
+              <div class="input-row">
+                <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+              </div>
+            </div>
           </div>
-          <p class="muted">Google 캘린더 또는 iCal 주소를 입력하면 월간 일정이 보드에 표시됩니다.</p>
+          <p class="muted">최대 3개의 캘린더를 추가할 수 있습니다. 각 캘린더는 선택한 색상으로 보드에 표시됩니다.</p>
+        </div>
+        <div class="actions">
+          <button type="submit">저장</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="todoist-card">
+      <h2>Todoist</h2>
+      <form data-section="todoist">
+        <div class="field">
+          <label for="todoist-token">API 토큰</label>
+          <div class="input-row">
+            <input id="todoist-token" name="api_token" type="password" placeholder="Todoist API Token"/>
+            <button type="button" class="secret-toggle" data-toggle="todoist-token">보기</button>
+          </div>
+          <p class="muted">Todoist 웹에서 <strong>Settings &gt; Integrations</strong> 메뉴에서 API 토큰을 확인할 수 있습니다.</p>
+        </div>
+        <div class="field">
+          <label for="todoist-project">프로젝트 ID (선택)</label>
+          <div class="input-row">
+            <input id="todoist-project" name="project_id" type="text" placeholder="특정 프로젝트만 불러오려면 입력"/>
+          </div>
         </div>
         <div class="actions">
           <button type="submit">저장</button>
@@ -400,6 +505,47 @@ const state = {
   config: null,
 };
 
+const CAL_DEFAULT_COLOR = '#4b6bff';
+const calendarRows = Array.from(document.querySelectorAll('#calendar-card .calendar-row'));
+
+function updateCalendarButton(row, color) {
+  const btn = row.querySelector('.color-chip');
+  if (btn) btn.style.setProperty('--chip-color', color || CAL_DEFAULT_COLOR);
+}
+
+function setCalendarRow(row, data) {
+  const urlInput = row.querySelector('[data-role="calendar-url"]');
+  const colorInput = row.querySelector('[data-role="calendar-color"]');
+  const defaultColor = (colorInput && colorInput.dataset.defaultColor) || CAL_DEFAULT_COLOR;
+  if (urlInput) urlInput.value = data && data.url ? data.url : '';
+  if (colorInput) {
+    const color = data && data.color ? data.color : defaultColor;
+    colorInput.value = color;
+    updateCalendarButton(row, color);
+  }
+}
+
+calendarRows.forEach((row) => {
+  const colorInput = row.querySelector('[data-role="calendar-color"]');
+  const button = row.querySelector('.color-chip');
+  if (colorInput) {
+    if (!colorInput.dataset.defaultColor) {
+      colorInput.dataset.defaultColor = colorInput.value || CAL_DEFAULT_COLOR;
+    }
+    updateCalendarButton(row, colorInput.value || CAL_DEFAULT_COLOR);
+    colorInput.addEventListener('input', () => updateCalendarButton(row, colorInput.value || CAL_DEFAULT_COLOR));
+  }
+  if (button && colorInput) {
+    button.addEventListener('click', () => {
+      if (typeof colorInput.showPicker === 'function') {
+        colorInput.showPicker();
+      } else {
+        colorInput.click();
+      }
+    });
+  }
+});
+
 function encodePhotoPath(name) {
   return name.split('/').map(encodeURIComponent).join('/');
 }
@@ -433,14 +579,27 @@ async function loadConfig() {
   }
 }
 
+function fillCalendarRows(frame) {
+  const calendars = Array.isArray(frame?.calendars) ? frame.calendars : [];
+  const list = calendars.length ? calendars : (frame?.ical_url ? [{ url: frame.ical_url, color: CAL_DEFAULT_COLOR }] : []);
+  calendarRows.forEach((row, idx) => {
+    const data = list[idx] || null;
+    setCalendarRow(row, data);
+    if (!data) {
+      const colorInput = row.querySelector('[data-role="calendar-color"]');
+      if (colorInput) updateCalendarButton(row, colorInput.value || colorInput.dataset.defaultColor || CAL_DEFAULT_COLOR);
+    }
+  });
+}
+
 function fillFields() {
   if (!state.config) return;
-  const { frame, home_assistant, bus, weather, telegram, verse } = state.config;
+  const { frame, home_assistant, bus, weather, telegram, verse, todoist } = state.config;
   const setValue = (id, value='') => {
     const el = document.getElementById(id);
     if (el) el.value = value || '';
   };
-  if (frame) setValue('ical-url', frame.ical_url);
+  if (frame) fillCalendarRows(frame);
   if (home_assistant) {
     setValue('ha-base', home_assistant.base_url);
     setValue('ha-token', home_assistant.token);
@@ -457,6 +616,10 @@ function fillFields() {
   if (telegram) {
     setValue('tg-token', telegram.bot_token);
     setValue('tg-ids', telegram.allowed_user_ids_text);
+  }
+  if (todoist) {
+    setValue('todoist-token', todoist.api_token);
+    setValue('todoist-project', todoist.project_id);
   }
   if (verse) {
     setValue('verse-text', verse.text);
@@ -490,7 +653,22 @@ async function submitSection(form) {
     }
     return;
   }
-  payload[section] = gatherFormData(form);
+  if (section === 'frame') {
+    const rows = Array.from(form.querySelectorAll('.calendar-row'));
+    const calendars = rows
+      .map((row) => {
+        const urlInput = row.querySelector('[data-role="calendar-url"]');
+        const colorInput = row.querySelector('[data-role="calendar-color"]');
+        const url = urlInput ? urlInput.value.trim() : '';
+        if (!url) return null;
+        const color = colorInput && colorInput.value ? colorInput.value : CAL_DEFAULT_COLOR;
+        return { url, color };
+      })
+      .filter(Boolean);
+    payload[section] = { calendars };
+  } else {
+    payload[section] = gatherFormData(form);
+  }
   setStatus(`#${form.closest('.card').id}`, '저장 중...');
   try {
     const res = await fetch('/api/settings', {

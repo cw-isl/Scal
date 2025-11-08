@@ -40,7 +40,9 @@
   .dnum { font-size:14px; opacity:.95; margin-bottom:4px; text-shadow:0 0 6px rgba(0,0,0,.65);}
   .ev { font-size:12px; line-height:1.25; margin:2px 0;
         background:rgba(0,0,0,.45); border-radius:6px; padding:2px 6px;
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(0,0,0,.65);}
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(0,0,0,.65);
+        transition:background .2s ease, color .2s ease;}
+  .ev.has-color { text-shadow:none; font-weight:600; }
 
   .section {
     position:relative;
@@ -80,9 +82,13 @@
 .todo{ display:flex; flex-direction:column; height:100%; min-height:170px; }
   .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; flex:1 1 auto; }
   .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
-  .todo .item { display:flex; justify-content:flex-start; gap:10px; font-size:14px; }
-  .todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .todo .due { opacity:.9; min-width:50px; margin-right:12px; }
+.todo .item { display:flex; align-items:center; gap:10px; font-size:14px; padding:4px 6px; border-radius:8px; }
+.todo .item.overdue { background:rgba(255,75,75,0.12); }
+.todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.todo .due { opacity:.9; min-width:56px; margin-left:auto; font-weight:600; text-align:right; }
+.todo .item.overdue .due { color:#ffb4b4; }
+.todo .message { font-size:13px; opacity:.85; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,.25); }
+.todo .message.error { color:#ffb4b4; }
 
   .bus{display:flex; flex-direction:column; gap:10px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:16px 18px; height:100%; min-height:190px;}
   .bus .arrivals{display:flex; flex-direction:column; gap:8px; min-width:0; flex:1 1 auto;}
@@ -245,12 +251,40 @@ setInterval(tick, 1000); tick();
 
 function startOfWeek(d){ const day=d.getDay(); const s=new Date(d); s.setDate(d.getDate()-day); s.setHours(0,0,0,0); return s; }
 
+function pickTextColor(hex){
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return '#fff';
+  let h = hex.slice(1);
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (h.length !== 6) return '#fff';
+  const r = parseInt(h.slice(0,2),16);
+  const g = parseInt(h.slice(2,4),16);
+  const b = parseInt(h.slice(4,6),16);
+  if ([r,g,b].some(n => Number.isNaN(n))) return '#fff';
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 155 ? '#111' : '#fff';
+}
+
+function applyEventColor(el, color){
+  if (!color) return;
+  el.style.backgroundColor = color;
+  el.style.color = pickTextColor(color);
+  el.classList.add('has-color');
+}
+
 async function loadEvents(){
   const d=new Date();
   const y=d.getFullYear(), m=d.getMonth()+1;
   document.getElementById('cal-title').textContent = `Calendar  ${y}-${z(m)}`;
-  const r = await fetch(`/api/events?year=${y}&month=${m}`);
-  const items = await r.json();
+  let items = [];
+  try {
+    const r = await fetch(`/api/events?year=${y}&month=${m}`);
+    if (!r.ok) throw new Error('failed');
+    items = await r.json();
+    if (!Array.isArray(items)) items = [];
+  } catch (err) {
+    console.error('Failed to load calendar events', err);
+    items = [];
+  }
 
   const byDay = {};
   for(const ev of items){
@@ -271,6 +305,7 @@ async function loadEvents(){
     const arr = (byDay[key]||[]).slice(0,3);
     for(const ev of arr){
       const e=document.createElement('div'); e.className='ev'; e.textContent = ev.title || '(untitled)';
+      if (ev.color) applyEventColor(e, ev.color);
       cell.appendChild(e);
     }
     grid.appendChild(cell);
@@ -280,8 +315,72 @@ async function loadEvents(){
 }
 loadEvents(); setInterval(loadEvents, 5*60*1000);
 
+function clearTodoColumns(){
+  const c1=document.getElementById('todo-col-1');
+  const c2=document.getElementById('todo-col-2');
+  if (c1) c1.innerHTML='';
+  if (c2) c2.innerHTML='';
+  return [c1,c2];
+}
 
+function showTodoMessage(text, isError=false){
+  const [c1,c2]=clearTodoColumns();
+  if (!c1) return;
+  const msg=document.createElement('div');
+  msg.className='message'+(isError?' error':'');
+  msg.textContent=text;
+  c1.appendChild(msg);
+}
 
+function renderTodoItems(items){
+  const [c1,c2]=clearTodoColumns();
+  if (!c1 || !c2) return;
+  const cols=[c1,c2];
+  const limited=items.slice(0,8);
+  limited.forEach((task, idx)=>{
+    const row=document.createElement('div');
+    row.className='item';
+    if (task.overdue) row.classList.add('overdue');
+    const title=document.createElement('div');
+    title.className='title';
+    title.textContent=task.title || '(untitled)';
+    const due=document.createElement('div');
+    due.className='due';
+    due.textContent=task.due_label || '—';
+    row.appendChild(title);
+    row.appendChild(due);
+    cols[idx % cols.length].appendChild(row);
+  });
+}
+
+async function loadTodo(){
+  try{
+    const res=await fetch('/api/todo');
+    const data=await res.json();
+    if (!res.ok){
+      throw new Error(data.error || 'failed');
+    }
+    if (data.need_config){
+      showTodoMessage('설정 화면에서 Todoist API 토큰을 입력하세요.');
+      return;
+    }
+    if (data.error){
+      showTodoMessage(data.error, true);
+      return;
+    }
+    const items=Array.isArray(data.items)?data.items:[];
+    if (!items.length){
+      showTodoMessage('오늘은 완료할 일이 없어요!');
+      return;
+    }
+    renderTodoItems(items);
+  }catch(err){
+    console.error('Failed to load todo list', err);
+    showTodoMessage('할 일을 불러오지 못했습니다.', true);
+  }
+}
+
+loadTodo(); setInterval(loadTodo, 60*1000);
 
 // ===== Weather block (final: card-style 5-day forecast) =====
 async function loadWeather() {
