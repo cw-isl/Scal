@@ -512,58 +512,6 @@ async function loadVerse(){
 }
 loadVerse(); setInterval(loadVerse, 10*1000);
 
-// ===== Todo block (Todoist, 2 columns, 10 each) =====
-function fmtDue(v){
-  if(!v) return '';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-    if (m) return m[2] + '/' + m[3];
-    return v;
-  }
-  return (d.getMonth()+1) + '/' + d.getDate();
-}
-
-async function loadTodo(){
-  try{
-    const r = await fetch('/api/todo');
-    const data = await r.json();
-    const c1 = document.getElementById('todo-col-1');
-    const c2 = document.getElementById('todo-col-2');
-    c1.innerHTML = ''; c2.innerHTML = '';
-
-    if (data.need_config){
-      const msg = document.createElement('div'); msg.textContent = 'Todoist API token required';
-      c1.appendChild(msg);
-      return;
-    }
-    if (!Array.isArray(data) || data.length === 0){
-      const msg = document.createElement('div'); msg.textContent = 'No pending tasks.';
-      c1.appendChild(msg);
-      return;
-    }
-
-    const first10 = data.slice(0,10);
-    const next10  = data.slice(10,20);
-
-    for (const t of first10){
-      const row = document.createElement('div'); row.className='item';
-      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
-      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
-      row.appendChild(date); row.appendChild(title); c1.appendChild(row);
-    }
-    for (const t of next10){
-      const row = document.createElement('div'); row.className='item';
-      const date = document.createElement('div'); date.className='due'; date.textContent = fmtDue(t.due) || '';
-      const title = document.createElement('div'); title.className='title'; title.textContent = t.title || '(untitled)';
-      row.appendChild(date); row.appendChild(title); c2.appendChild(row);
-    }
-  }catch(e){
-    // ignore
-  }
-}
-loadTodo(); setInterval(loadTodo, 20*1000);
-
 // ===== Home Assistant 제어 패널 =====
 let haDevices = [];
 const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'', dashboardTitle:'' };
