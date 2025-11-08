@@ -5,8 +5,8 @@ bus:
 frame:
   calendars:
   - color: '#fff04d'
-    url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/priv>
-  ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/p>
+    url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
+  ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
   tz: Asia/Seoul
 home_assistant:
   base_url: http://localhost:8123
