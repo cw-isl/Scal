@@ -355,21 +355,34 @@
     </section>
 
     <section class="card" id="home-card">
-      <h2>Home Assistant</h2>
-      <form data-section="home_assistant">
+      <h2>Google Home</h2>
+      <form data-section="google_home">
         <div class="field">
-          <label for="ha-base">베이스 URL</label>
+          <label for="gh-service">서비스 계정 JSON 경로</label>
           <div class="input-row">
-            <input id="ha-base" name="base_url" type="url" placeholder="https://your-ha.duckdns.org"/>
+            <input id="gh-service" name="service_account_file" type="text" placeholder="/root/scal/google-home-service-account.json"/>
+          </div>
+          <p class="muted">Google Cloud 콘솔에서 다운로드한 서비스 계정 키 파일 경로를 입력하세요.</p>
+        </div>
+        <div class="field">
+          <label for="gh-agent">agentUserId</label>
+          <div class="input-row">
+            <input id="gh-agent" name="agent_user_id" type="text" placeholder="Google Home agentUserId"/>
           </div>
         </div>
         <div class="field">
-          <label for="ha-token">장기 토큰</label>
+          <label for="gh-types">허용 기기 타입 (선택)</label>
           <div class="input-row">
-            <input id="ha-token" name="token" type="password" autocomplete="new-password" placeholder="Home Assistant Long-Lived Token"/>
-            <button type="button" class="secret-toggle" data-toggle="ha-token">보기</button>
+            <textarea id="gh-types" name="include_types" rows="3" placeholder="콤마 또는 줄바꿈으로 구분하여 입력"></textarea>
           </div>
-          <p class="muted">토큰은 <strong>사용자 프로필 &gt; Long-Lived Access Tokens</strong>에서 생성합니다.</p>
+          <p class="muted">예: action.devices.types.LIGHT, action.devices.types.SWITCH · 비우면 전체 타입을 허용합니다.</p>
+        </div>
+        <div class="field">
+          <label for="gh-devices">허용 기기 ID (선택)</label>
+          <div class="input-row">
+            <textarea id="gh-devices" name="include_devices" rows="3" placeholder="콤마 또는 줄바꿈으로 구분하여 입력"></textarea>
+          </div>
+          <p class="muted">특정 기기만 표시하려면 기기 ID를 입력하세요. 비우면 모든 기기를 표시합니다.</p>
         </div>
         <div class="actions">
           <button type="submit">저장</button>
@@ -594,15 +607,19 @@ function fillCalendarRows(frame) {
 
 function fillFields() {
   if (!state.config) return;
-  const { frame, home_assistant, bus, weather, telegram, verse, todoist } = state.config;
+  const { frame, google_home, bus, weather, telegram, verse, todoist } = state.config;
   const setValue = (id, value='') => {
     const el = document.getElementById(id);
     if (el) el.value = value || '';
   };
   if (frame) fillCalendarRows(frame);
-  if (home_assistant) {
-    setValue('ha-base', home_assistant.base_url);
-    setValue('ha-token', home_assistant.token);
+  if (google_home) {
+    setValue('gh-service', google_home.service_account_file);
+    setValue('gh-agent', google_home.agent_user_id);
+    const types = Array.isArray(google_home.include_types) ? google_home.include_types.join('\n') : '';
+    const devices = Array.isArray(google_home.include_devices) ? google_home.include_devices.join('\n') : '';
+    setValue('gh-types', types);
+    setValue('gh-devices', devices);
   }
   if (bus) {
     setValue('bus-key', bus.key);
@@ -666,6 +683,21 @@ async function submitSection(form) {
       })
       .filter(Boolean);
     payload[section] = { calendars };
+  } else if (section === 'google_home') {
+    const data = gatherFormData(form);
+    const toList = (raw) => {
+      if (!raw) return [];
+      return raw
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    };
+    payload[section] = {
+      service_account_file: data.service_account_file || '',
+      agent_user_id: data.agent_user_id || '',
+      include_types: toList(data.include_types || ''),
+      include_devices: toList(data.include_devices || ''),
+    };
   } else {
     payload[section] = gatherFormData(form);
   }

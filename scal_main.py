@@ -11,7 +11,7 @@ from __future__ import annotations
 import os, time, secrets, threading, re, fcntl, xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 import requests
@@ -203,42 +203,36 @@ def bus_search_stops(city_code: str, keyword: str, service_key: str, *, limit: i
                 break
     return stops
 
-# === [SECTION: Home Assistant 연동 헬퍼] =====================================
+# === [SECTION: Google Home 연동 헬퍼] =======================================
 
-HA_DOMAIN_ICONS = {
-    "light": "💡",
-    "switch": "🔌",
-    "fan": "🌀",
-    "media_player": "🔊",
-    "climate": "🌡️",
-    "humidifier": "💧",
-    "cover": "🪟",
-    "lock": "🔐",
-    "vacuum": "🤖",
-    "scene": "🎨",
-    "script": "⚙️",
-    "automation": "⚡",
-    "input_boolean": "🔘",
+# Optional dependency loaded via requirements.txt
+try:
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    service_account = None  # type: ignore[assignment]
+    GoogleAuthRequest = None  # type: ignore[assignment]
+
+
+GOOGLE_HOME_BASE_URL = "https://homegraph.googleapis.com/v1"
+GOOGLE_HOME_SCOPES = ("https://www.googleapis.com/auth/homegraph",)
+
+GOOGLE_DEVICE_ICONS = {
+    "action.devices.types.LIGHT": "💡",
+    "action.devices.types.SWITCH": "🔌",
+    "action.devices.types.OUTLET": "🔌",
+    "action.devices.types.SENSOR": "📟",
+    "action.devices.types.FAN": "🌀",
+    "action.devices.types.AC_UNIT": "🌬️",
+    "action.devices.types.THERMOSTAT": "🌡️",
+    "action.devices.types.AIRPURIFIER": "💧",
+    "action.devices.types.DISPLAY": "🖥️",
+    "action.devices.types.SPEAKER": "🔊",
+    "action.devices.types.TV": "📺",
+    "action.devices.types.VACUUM": "🤖",
+    "action.devices.types.SCENE": "🎨",
+    "action.devices.types.LOCK": "🔐",
 }
-
-HA_SERVICE_MAP: Dict[str, Tuple[Optional[str], Optional[str]]] = {
-    "light": ("turn_on", "turn_off"),
-    "switch": ("turn_on", "turn_off"),
-    "fan": ("turn_on", "turn_off"),
-    "media_player": ("turn_on", "turn_off"),
-    "climate": ("turn_on", "turn_off"),
-    "humidifier": ("turn_on", "turn_off"),
-    "input_boolean": ("turn_on", "turn_off"),
-    "automation": ("turn_on", "turn_off"),
-    "vacuum": ("start", "return_to_base"),
-    "cover": ("open_cover", "close_cover"),
-    "lock": ("unlock", "lock"),
-    "scene": ("turn_on", None),
-    "script": ("turn_on", None),
-}
-
-
-HA_ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$", re.IGNORECASE)
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -255,29 +249,6 @@ def _coerce_bool(value: Any) -> bool:
     raise ValueError("불리언으로 변환할 수 없는 값입니다.")
 
 
-class HomeAssistantError(RuntimeError):
-    """Base exception for Home Assistant helper errors."""
-
-
-class HomeAssistantConfigError(HomeAssistantError):
-    """Raised when configuration is incomplete."""
-
-
-class HomeAssistantAPIError(HomeAssistantError):
-    """Raised when the Home Assistant API responds with an error."""
-
-
-def _home_assistant_cfg() -> Dict[str, Any]:
-    return CFG.get("home_assistant", {}) or {}
-
-
-def _normalize_base_url(url: str) -> str:
-    url = (url or "").strip()
-    if not url:
-        return ""
-    return url.rstrip("/")
-
-
 def _mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
     value = (value or "").strip()
     if not value:
@@ -289,44 +260,94 @@ def _mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
     return value[:head] + "*" * (len(value) - head - tail) + value[-tail:]
 
 
-def _home_assistant_session() -> Tuple[requests.Session, str, float, Dict[str, Any]]:
-    cfg = _home_assistant_cfg()
-    base_url = _normalize_base_url(cfg.get("base_url", ""))
-    token = (cfg.get("token") or "").strip()
-    if not base_url:
-        raise HomeAssistantConfigError("home_assistant.base_url 설정이 필요합니다.")
-    if not token:
-        raise HomeAssistantConfigError("home_assistant.token 설정이 필요합니다.")
+class GoogleHomeError(RuntimeError):
+    """Google Home 통신과 관련된 기본 예외."""
 
-    verify_raw = cfg.get("verify_ssl", True)
-    if isinstance(verify_raw, str):
-        try:
-            verify = _coerce_bool(verify_raw)
-        except ValueError:
-            verify = True
-    else:
-        verify = bool(verify_raw) if isinstance(verify_raw, bool) else True
 
-    timeout_raw = cfg.get("timeout", 5)
+class GoogleHomeConfigError(GoogleHomeError):
+    """설정이 누락되었거나 잘못되었을 때 발생."""
+
+
+class GoogleHomeAPIError(GoogleHomeError):
+    """Google Home Graph API 호출이 실패했을 때 발생."""
+
+
+def _google_home_cfg() -> Dict[str, Any]:
+    return CFG.get("google_home", {}) or {}
+
+
+def _google_home_timeout(cfg: Dict[str, Any]) -> float:
+    raw = cfg.get("timeout", 10)
     try:
-        timeout = max(1.0, float(timeout_raw))
+        timeout = float(raw)
     except (TypeError, ValueError):
-        timeout = 5.0
+        timeout = 10.0
+    return max(5.0, timeout)
+
+
+def _load_google_credentials(cfg: Dict[str, Any]):
+    if service_account is None or GoogleAuthRequest is None:
+        raise GoogleHomeConfigError("google-auth 패키지가 필요합니다. requirements.txt를 확인하세요.")
+
+    sa_file = (cfg.get("service_account_file") or "").strip()
+    if not sa_file:
+        raise GoogleHomeConfigError("google_home.service_account_file 설정이 필요합니다.")
+
+    path = Path(sa_file).expanduser()
+    if not path.exists():
+        raise GoogleHomeConfigError(f"서비스 계정 키 파일을 찾을 수 없습니다: {path}")
+
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            str(path), scopes=GOOGLE_HOME_SCOPES
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        raise GoogleHomeConfigError(f"서비스 계정 자격 증명 로드 실패: {exc}") from exc
+
+    request = GoogleAuthRequest()
+    try:
+        credentials.refresh(request)
+    except Exception as exc:
+        raise GoogleHomeAPIError(f"Google OAuth 토큰 갱신 실패: {exc}") from exc
+
+    if not credentials.token:
+        raise GoogleHomeAPIError("Google OAuth 토큰을 받지 못했습니다.")
+
+    return credentials
+
+
+def _google_home_session() -> Tuple[requests.Session, float, Dict[str, Any], str]:
+    cfg = _google_home_cfg()
+    agent_user_id = (cfg.get("agent_user_id") or "").strip()
+    if not agent_user_id:
+        raise GoogleHomeConfigError("google_home.agent_user_id 설정이 필요합니다.")
+
+    credentials = _load_google_credentials(cfg)
+    timeout = _google_home_timeout(cfg)
 
     session = requests.Session()
-    session.headers.update({
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    })
-    session.verify = verify
-    return session, base_url, timeout, cfg
+    session.headers.update(
+        {
+            "Authorization": f"Bearer {credentials.token}",
+            "Content-Type": "application/json",
+        }
+    )
+    return session, timeout, cfg, agent_user_id
 
 
-def _ha_request(session: requests.Session, method: str, url: str, *, timeout: float, json_payload: Optional[Dict[str, Any]] = None) -> Any:
+def _google_home_request(
+    session: requests.Session,
+    method: str,
+    path: str,
+    *,
+    timeout: float,
+    json_payload: Optional[Dict[str, Any]] = None,
+) -> Any:
+    url = f"{GOOGLE_HOME_BASE_URL}{path}"
     try:
         resp = session.request(method, url, json=json_payload, timeout=timeout)
-    except Exception as e:
-        raise HomeAssistantAPIError(f"Home Assistant 요청 실패: {e}")
+    except Exception as exc:
+        raise GoogleHomeAPIError(f"Google Home 요청 실패: {exc}") from exc
 
     if resp.status_code >= 400:
         try:
@@ -334,357 +355,209 @@ def _ha_request(session: requests.Session, method: str, url: str, *, timeout: fl
         except Exception:
             detail = resp.text
         if isinstance(detail, dict):
-            message = detail.get("message") or detail.get("error") or detail
+            message = detail.get("error") or detail.get("message") or detail
         else:
             message = detail
-        raise HomeAssistantAPIError(f"HTTP {resp.status_code}: {message}")
+        raise GoogleHomeAPIError(f"HTTP {resp.status_code}: {message}")
 
     if resp.content:
         try:
             return resp.json()
-        except Exception:
-            raise HomeAssistantAPIError("응답 JSON 파싱 실패")
+        except Exception as exc:
+            raise GoogleHomeAPIError("응답 JSON 파싱 실패") from exc
     return None
 
 
-def _ha_fetch_states(session: requests.Session, base_url: str, timeout: float) -> List[Dict[str, Any]]:
-    data = _ha_request(session, "GET", f"{base_url}/api/states", timeout=timeout)
-    if not isinstance(data, list):
-        raise HomeAssistantAPIError("/api/states 응답 형식이 올바르지 않습니다.")
-    return data
+def _google_home_should_include(device: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    include_devices = cfg.get("include_devices")
+    include_types = cfg.get("include_types")
+    device_id = str(device.get("id") or "")
+    device_type = device.get("type") or ""
+
+    if isinstance(include_devices, list) and include_devices:
+        normalized = {str(x).strip() for x in include_devices if x}
+        return device_id in normalized
+
+    if isinstance(include_types, list) and include_types:
+        normalized_types = {str(x).strip() for x in include_types if x}
+        return device_type in normalized_types or not normalized_types
+
+    return True
 
 
-def _ha_fetch_areas(session: requests.Session, base_url: str, timeout: float) -> Dict[str, str]:
-    try:
-        data = _ha_request(session, "GET", f"{base_url}/api/areas", timeout=timeout)
-    except HomeAssistantAPIError:
-        return {}
-    if not isinstance(data, list):
-        return {}
-    areas = {}
-    for item in data:
-        if isinstance(item, dict):
-            area_id = item.get("area_id")
-            name = item.get("name") or item.get("id")
-            if area_id and isinstance(name, str):
-                areas[area_id] = name
-    return areas
+def _google_home_pick_icon(device_type: str) -> str:
+    return GOOGLE_DEVICE_ICONS.get(device_type, "🔘")
 
 
-def _ha_fetch_device_area(session: requests.Session, base_url: str, timeout: float) -> Dict[str, str]:
-    try:
-        data = _ha_request(session, "GET", f"{base_url}/api/devices", timeout=timeout)
-    except HomeAssistantAPIError:
-        return {}
-    if not isinstance(data, list):
-        return {}
-    device_area: Dict[str, str] = {}
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        device_id = item.get("id")
-        area_id = item.get("area_id")
-        if isinstance(device_id, str) and isinstance(area_id, str) and area_id:
-            device_area[device_id] = area_id
-    return device_area
-
-
-def _ha_collect_entities(node: Any, acc: Set[str]) -> None:
-    if isinstance(node, dict):
-        for value in node.values():
-            _ha_collect_entities(value, acc)
-    elif isinstance(node, (list, tuple, set)):
-        for item in node:
-            _ha_collect_entities(item, acc)
-    elif isinstance(node, str):
-        candidate = node.strip()
-        if candidate and HA_ENTITY_ID_RE.match(candidate):
-            acc.add(candidate)
-
-
-def _ha_should_include(entity_id: str, cfg: Dict[str, Any]) -> bool:
-    include_domains = cfg.get("include_domains") or []
-    include_entities = cfg.get("include_entities") or []
-    domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
-
-    include_entities_set = {e for e in include_entities if isinstance(e, str)}
-    include_domains_set = {d for d in include_domains if isinstance(d, str)}
-
-    if include_entities_set and entity_id in include_entities_set:
-        return True
-    if include_domains_set and domain in include_domains_set:
-        return True
-    if include_entities_set or include_domains_set:
-        return False
-    # 기본값: 토글 가능한 대표 도메인만 노출
-    return domain in {
-        "light",
-        "switch",
-        "fan",
-        "media_player",
-        "humidifier",
-        "input_boolean",
-        "automation",
-        "cover",
-        "lock",
-        "vacuum",
-        "scene",
-        "script",
-    }
-
-
-def _ha_pick_icon(domain: str) -> str:
-    return HA_DOMAIN_ICONS.get(domain, "🔘")
-
-
-def _ha_interpret_on(domain: str, state_value: str) -> Optional[bool]:
-    if not state_value:
-        return None
-    s = state_value.lower()
-    if s in {"unavailable", "unknown"}:
-        return None
-    if domain == "cover":
-        if s in {"opening"}:
-            return True
-        if s in {"closing"}:
-            return False
-        return s in {"open"}
-    if domain == "lock":
-        if s in {"locking", "unlocking"}:
-            return None
-        return s not in {"locked"}
-    if domain == "media_player":
-        if s in {"playing", "on"}:
-            return True
-        if s in {"off", "standby"}:
-            return False
-        if s in {"paused"}:
-            return None
-    if domain == "vacuum":
-        if s in {"docked"}:
-            return False
-        if s in {"cleaning", "returning"}:
-            return True
-    if domain in {"scene", "script"}:
-        return None
-    return s not in {"off", "closed", "closing", "idle", "standby", "paused", "locked"}
-
-
-def _ha_state_label(domain: str, state_value: str, raw_display: str, online: bool, is_on: Optional[bool]) -> str:
+def _google_home_state_label(can_toggle: bool, online: bool, state: Dict[str, Any]) -> str:
     if not online:
         return "오프라인"
-    if domain == "cover":
-        if state_value in {"opening"}:
-            return "열리는 중…"
-        if state_value in {"closing"}:
-            return "닫히는 중…"
-        if is_on is True:
-            return "열림"
-        if is_on is False:
-            return "닫힘"
-    if domain == "lock":
-        if state_value == "locking":
-            return "잠그는 중…"
-        if state_value == "unlocking":
-            return "잠금 해제 중…"
-        return "잠금 해제" if is_on else "잠김"
-    if domain == "media_player":
-        if state_value == "playing":
-            return "재생 중"
-        if state_value == "paused":
-            return "일시정지"
-        if is_on is False:
-            return "꺼짐"
-    if domain == "vacuum":
-        if state_value == "cleaning":
-            return "청소 중"
-        if state_value == "returning":
-            return "복귀 중"
-        if state_value == "docked":
-            return "대기"
-    if domain in {"scene", "script"}:
-        return raw_display or ""
-    if is_on is True:
-        return "켜짐"
-    if is_on is False:
-        return "꺼짐"
-    return raw_display or "상태 확인 불가"
+
+    status = (state.get("status") or "").upper()
+    if status == "ERROR":
+        error = state.get("errorCode") or state.get("error_code") or "알 수 없는 오류"
+        return f"오류: {error}"
+
+    on_state = state.get("on")
+    if can_toggle and isinstance(on_state, bool):
+        return "켜짐" if on_state else "꺼짐"
+
+    if isinstance(state.get("brightness"), (int, float)):
+        return f"밝기 {int(state['brightness'])}%"
+
+    if isinstance(state.get("humidity"), (int, float)):
+        return f"습도 {int(state['humidity'])}%"
+
+    if isinstance(state.get("temperatureSetpoint"), (int, float)):
+        return f"설정 {state['temperatureSetpoint']}°"
+
+    return "상태 확인 필요"
 
 
-def _format_ha_device(state: Dict[str, Any], area_lookup: Dict[str, str], device_area: Dict[str, str]) -> Optional[Dict[str, Any]]:
-    entity_id = state.get("entity_id")
-    if not isinstance(entity_id, str):
-        return None
-    cfg = _home_assistant_cfg()
-    if not _ha_should_include(entity_id, cfg):
-        return None
+def _format_google_home_device(device: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    device_id = str(device.get("id") or "")
+    if not device_id:
+        raise GoogleHomeAPIError("동기화 응답에 기기 ID가 없습니다.")
 
-    domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
-    attributes = state.get("attributes") or {}
-    if not isinstance(attributes, dict):
-        attributes = {}
+    name_block = device.get("name") if isinstance(device.get("name"), dict) else {}
+    display_name: Optional[str] = None
+    if isinstance(name_block, dict):
+        display_name = name_block.get("name")
+        if not display_name:
+            defaults = name_block.get("defaultNames")
+            if isinstance(defaults, list) and defaults:
+                display_name = str(defaults[0])
+            else:
+                nick = name_block.get("nicknames")
+                if isinstance(nick, list) and nick:
+                    display_name = str(nick[0])
 
-    friendly_name = attributes.get("friendly_name") or entity_id
-    area_id = attributes.get("area_id")
-    if isinstance(area_id, str) and area_id:
-        room = area_lookup.get(area_id, "")
-    else:
-        device_id = attributes.get("device_id")
-        room = area_lookup.get(device_area.get(device_id, ""), "") if isinstance(device_id, str) else ""
+    display_name = str(display_name or device_id)
 
-    raw_state = state.get("state") or ""
-    if not isinstance(raw_state, str):
-        raw_state = str(raw_state)
-    raw_display = raw_state.strip()
-    normalized = raw_display.lower()
-    online = normalized not in {"unavailable", "unknown"}
-    is_on = _ha_interpret_on(domain, normalized)
+    room = device.get("roomHint") or ""
+    traits = device.get("traits") if isinstance(device.get("traits"), list) else []
+    can_toggle = "action.devices.traits.OnOff" in traits
 
-    services = HA_SERVICE_MAP.get(domain, (None, None))
-    can_toggle = bool(services[0] and services[1])
+    online = bool(state.get("online", True))
+    status = (state.get("status") or "").upper()
+    error_code = (state.get("errorCode") or state.get("error_code") or "").lower()
+    if status == "ERROR" and "offline" in error_code:
+        online = False
 
-    icon = _ha_pick_icon(domain)
-    label = _ha_state_label(domain, normalized, raw_display, online, is_on)
+    icon = _google_home_pick_icon(str(device.get("type") or ""))
+    state_label = _google_home_state_label(can_toggle, online, state)
+    on_state = state.get("on") if isinstance(state.get("on"), bool) else None
 
     return {
-        "id": entity_id,
-        "name": friendly_name,
-        "room": room,
-        "type": domain,
+        "id": device_id,
+        "name": display_name,
+        "room": room if isinstance(room, str) else "",
+        "type": str(device.get("type") or ""),
         "icon": icon,
         "online": online,
         "can_toggle": can_toggle,
-        "traits": [],
-        "state": {"on": is_on if isinstance(is_on, bool) else None},
-        "state_label": label,
+        "traits": traits,
+        "state": {"on": on_state},
+        "state_label": state_label,
     }
 
 
-def home_assistant_list_devices() -> List[Dict[str, Any]]:
-    session, base_url, timeout, _cfg = _home_assistant_session()
+def google_home_list_devices() -> List[Dict[str, Any]]:
+    session, timeout, cfg, agent_user_id = _google_home_session()
     try:
-        states = _ha_fetch_states(session, base_url, timeout)
-        areas = _ha_fetch_areas(session, base_url, timeout)
-        device_area = _ha_fetch_device_area(session, base_url, timeout)
-        devices: List[Dict[str, Any]] = []
-        for state in states:
-            if not isinstance(state, dict):
-                continue
-            formatted = _format_ha_device(state, areas, device_area)
-            if formatted:
-                devices.append(formatted)
-        devices.sort(key=lambda d: ((d.get("room") or ""), d.get("name") or d.get("id") or ""))
-        return devices
-    finally:
-        try:
-            session.close()
-        except Exception:
-            pass
-
-
-def home_assistant_list_dashboards() -> List[Dict[str, Any]]:
-    session, base_url, timeout, _cfg = _home_assistant_session()
-    try:
-        data = _ha_request(session, "GET", f"{base_url}/api/lovelace/dashboards", timeout=timeout)
-        if not isinstance(data, list):
-            raise HomeAssistantAPIError("/api/lovelace/dashboards 응답 형식이 올바르지 않습니다.")
-        dashboards: List[Dict[str, Any]] = []
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            url_path = (item.get("url_path") or item.get("id") or "").strip()
-            title = (item.get("title") or url_path or item.get("id") or "").strip()
-            dashboards.append(
-                {
-                    "id": item.get("id") or url_path or title,
-                    "title": title or "(이름 없음)",
-                    "url_path": url_path,
-                    "mode": item.get("mode") or "",
-                    "require_admin": bool(item.get("require_admin")),
-                }
-            )
-        dashboards.sort(key=lambda d: (d.get("title") or "").lower())
-        return dashboards
-    finally:
-        try:
-            session.close()
-        except Exception:
-            pass
-
-
-def home_assistant_fetch_dashboard_entities(url_path: str) -> Tuple[str, List[str]]:
-    url_path = (url_path or "").strip()
-    if not url_path:
-        raise HomeAssistantAPIError("대시보드 식별자가 필요합니다.")
-
-    session, base_url, timeout, _cfg = _home_assistant_session()
-    try:
-        safe_path = quote(url_path, safe="")
-        data = _ha_request(
-            session,
-            "GET",
-            f"{base_url}/api/lovelace/dashboards/{safe_path}",
-            timeout=timeout,
+        sync_payload = {"agentUserId": agent_user_id}
+        sync_data = _google_home_request(
+            session, "POST", "/devices:sync", timeout=timeout, json_payload=sync_payload
         )
-        if not isinstance(data, dict):
-            raise HomeAssistantAPIError("대시보드 상세 응답 형식이 올바르지 않습니다.")
+        if not isinstance(sync_data, dict):
+            raise GoogleHomeAPIError("devices:sync 응답 형식이 올바르지 않습니다.")
 
-        title = (data.get("title") or data.get("id") or url_path).strip()
-        views: List[Any] = []
-        config = data.get("config")
-        if isinstance(config, dict) and isinstance(config.get("views"), list):
-            views = config.get("views") or []
-        elif isinstance(data.get("views"), list):
-            views = data.get("views") or []
+        raw_devices = sync_data.get("devices")
+        devices_list: List[Dict[str, Any]] = []
+        if isinstance(raw_devices, list):
+            for device in raw_devices:
+                if isinstance(device, dict) and _google_home_should_include(device, cfg):
+                    devices_list.append(device)
 
-        found: Set[str] = set()
-        for view in views:
-            _ha_collect_entities(view, found)
+        if not devices_list:
+            return []
 
-        if not found:
-            raise HomeAssistantAPIError("선택한 대시보드에서 제어할 엔티티를 찾지 못했습니다.")
+        query_payload = {
+            "requestId": secrets.token_hex(8),
+            "agentUserId": agent_user_id,
+            "inputs": [
+                {
+                    "intent": "action.devices.QUERY",
+                    "payload": {
+                        "devices": [
+                            {"id": str(dev.get("id"))}
+                            for dev in devices_list
+                            if dev.get("id")
+                        ]
+                    },
+                }
+            ],
+        }
 
-        return title, sorted(found)
+        query_data = _google_home_request(
+            session, "POST", "/devices:query", timeout=timeout, json_payload=query_payload
+        )
+
+        states: Dict[str, Dict[str, Any]] = {}
+        if isinstance(query_data, dict):
+            payload = query_data.get("payload")
+            if isinstance(payload, dict) and isinstance(payload.get("devices"), dict):
+                devices_payload = payload.get("devices") or {}
+                if isinstance(devices_payload, dict):
+                    for key, val in devices_payload.items():
+                        if isinstance(val, dict):
+                            states[str(key)] = val
+
+        formatted: List[Dict[str, Any]] = []
+        for device in devices_list:
+            dev_id = str(device.get("id") or "")
+            state = states.get(dev_id, {})
+            formatted.append(_format_google_home_device(device, state))
+
+        formatted.sort(key=lambda d: ((d.get("room") or ""), d.get("name") or d.get("id") or ""))
+        return formatted
     finally:
         try:
             session.close()
-        except Exception:
+        except Exception:  # pragma: no cover - defensive
             pass
 
 
-def home_assistant_apply_dashboard(url_path: str) -> Dict[str, Any]:
-    title, entities = home_assistant_fetch_dashboard_entities(url_path)
-    cfg = CFG.setdefault("home_assistant", {})
-    cfg["include_entities"] = entities
-    dashboard_cfg = cfg.setdefault("dashboard", {})
-    dashboard_cfg["url_path"] = url_path
-    dashboard_cfg["title"] = title
-    dashboard_cfg["entity_count"] = len(entities)
-    save_config_to_source(CFG)
-    return {"title": title, "count": len(entities), "entities": entities}
+def google_home_execute(device_id: str, turn_on: bool) -> Any:
+    device_id = (device_id or "").strip()
+    if not device_id:
+        raise GoogleHomeAPIError("유효한 Google Home 기기 ID가 필요합니다.")
 
-
-def home_assistant_execute(entity_id: str, turn_on: bool) -> Any:
-    if not entity_id or "." not in entity_id:
-        raise HomeAssistantAPIError("유효한 Home Assistant 엔티티 ID가 필요합니다.")
-
-    session, base_url, timeout, _cfg = _home_assistant_session()
+    session, timeout, _cfg, agent_user_id = _google_home_session()
     try:
-        domain = entity_id.split(".", 1)[0]
-        on_service, off_service = HA_SERVICE_MAP.get(domain, (None, None))
-        service = on_service if turn_on else off_service
-        if not service:
-            action = "켜기" if turn_on else "끄기"
-            raise HomeAssistantAPIError(f"{domain} 엔티티는 '{action}' 명령을 지원하지 않습니다.")
-        url = f"{base_url}/api/services/{domain}/{service}"
-        payload = {"entity_id": entity_id}
-        return _ha_request(session, "POST", url, timeout=timeout, json_payload=payload)
+        payload = {
+            "requestId": secrets.token_hex(8),
+            "agentUserId": agent_user_id,
+            "commands": [
+                {
+                    "devices": [{"id": device_id}],
+                    "execution": [
+                        {
+                            "command": "action.devices.commands.OnOff",
+                            "params": {"on": bool(turn_on)},
+                        }
+                    ],
+                }
+            ],
+        }
+        return _google_home_request(
+            session, "POST", "/devices:executeCommand", timeout=timeout, json_payload=payload
+        )
     finally:
         try:
             session.close()
-        except Exception:
+        except Exception:  # pragma: no cover - defensive
             pass
-
 
 # === [SECTION: Photo file listing for board background] ======================
 def list_local_images():
@@ -698,7 +571,7 @@ def list_local_images():
 
 def _settings_snapshot() -> Dict[str, Any]:
     frame_cfg = CFG.get("frame", {}) or {}
-    ha_cfg = CFG.get("home_assistant", {}) or {}
+    gh_cfg = CFG.get("google_home", {}) or {}
     bus_cfg = CFG.get("bus", {}) or {}
     weather_cfg = CFG.get("weather", {}) or {}
     tg_cfg = CFG.get("telegram", {}) or {}
@@ -710,9 +583,11 @@ def _settings_snapshot() -> Dict[str, Any]:
             "ical_url": frame_cfg.get("ical_url", ""),
             "calendars": _calendar_entries(),
         },
-        "home_assistant": {
-            "base_url": ha_cfg.get("base_url", ""),
-            "token": ha_cfg.get("token", ""),
+        "google_home": {
+            "service_account_file": gh_cfg.get("service_account_file", ""),
+            "agent_user_id": gh_cfg.get("agent_user_id", ""),
+            "include_types": gh_cfg.get("include_types", []),
+            "include_devices": gh_cfg.get("include_devices", []),
         },
         "bus": {
             "key": bus_cfg.get("key", ""),
@@ -849,16 +724,33 @@ def api_update_settings():
                         _set_primary_calendar("")
                         updated = True
 
-        if "home_assistant" in payload:
-            section = payload["home_assistant"] or {}
-            base = (section.get("base_url") or "").strip()
-            token = (section.get("token") or "").strip()
-            if base and not re.match(r"^https?://", base, re.IGNORECASE):
-                errors.append("Home Assistant URL은 http:// 또는 https:// 로 시작해야 합니다.")
-            else:
-                CFG.setdefault("home_assistant", {})["base_url"] = _normalize_base_url(base)
-                CFG.setdefault("home_assistant", {})["token"] = token
-                updated = True
+        if "google_home" in payload:
+            section = payload["google_home"] or {}
+            cfg = CFG.setdefault("google_home", {})
+            sa_file = (section.get("service_account_file") or "").strip()
+            agent_user_id = (section.get("agent_user_id") or "").strip()
+            include_types = section.get("include_types")
+            include_devices = section.get("include_devices")
+
+            if sa_file:
+                cfg["service_account_file"] = sa_file
+            elif "service_account_file" in section:
+                cfg["service_account_file"] = sa_file
+
+            if agent_user_id or "agent_user_id" in section:
+                cfg["agent_user_id"] = agent_user_id
+
+            if isinstance(include_types, list):
+                cfg["include_types"] = [
+                    str(x).strip() for x in include_types if str(x).strip()
+                ]
+
+            if isinstance(include_devices, list):
+                cfg["include_devices"] = [
+                    str(x).strip() for x in include_devices if str(x).strip()
+                ]
+
+            updated = True
 
         if "bus" in payload:
             section = payload["bus"] or {}
@@ -1032,23 +924,17 @@ def api_bus():
 @app.get("/api/home-devices")
 def api_home_devices():
     try:
-        devices = home_assistant_list_devices()
-        resp: Dict[str, Any] = {"devices": devices}
-        dash_cfg = _home_assistant_cfg().get("dashboard") or {}
-        if isinstance(dash_cfg, dict) and (
-            dash_cfg.get("title") or dash_cfg.get("url_path")
-        ):
-            resp["dashboard"] = {
-                "title": dash_cfg.get("title") or "",
-                "url_path": dash_cfg.get("url_path") or "",
-                "entity_count": dash_cfg.get("entity_count"),
-            }
+        devices = google_home_list_devices()
+        resp: Dict[str, Any] = {
+            "devices": devices,
+            "dashboard": {"title": "Google Home", "entity_count": len(devices)},
+        }
         if not devices:
-            resp["message"] = "Home Assistant에서 표시할 기기를 찾지 못했습니다."
+            resp["message"] = "Google Home에서 표시할 기기를 찾지 못했습니다."
         return jsonify(resp)
-    except HomeAssistantConfigError as e:
+    except GoogleHomeConfigError as e:
         return jsonify({"need_config": True, "message": str(e)})
-    except HomeAssistantAPIError as e:
+    except GoogleHomeAPIError as e:
         return jsonify({"error": str(e)}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1065,11 +951,11 @@ def api_home_devices_execute(device_id: str):
         return jsonify({"error": str(e)}), 400
 
     try:
-        home_assistant_execute(device_id, desired)
+        google_home_execute(device_id, desired)
         return jsonify({"success": True})
-    except HomeAssistantConfigError as e:
+    except GoogleHomeConfigError as e:
         return jsonify({"error": str(e)}), 400
-    except HomeAssistantAPIError as e:
+    except GoogleHomeAPIError as e:
         return jsonify({"error": str(e)}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1137,7 +1023,7 @@ if TB:
         kb = telebot.types.InlineKeyboardMarkup(row_width=1)
         options = [
             ("1) 캘린더 iCal 주소", "cfg_ical"),
-            ("2) Home Assistant 설정", "cfg_ha"),
+            ("2) Google Home 설정", "cfg_gh"),
             ("3) 버스 정보", "cfg_bus"),
             ("4) 사진 등록", "cfg_photo"),
             ("5) 날씨 API 설정", "cfg_weather"),
@@ -1178,7 +1064,7 @@ if TB:
 
 
     @TB.callback_query_handler(
-        func=lambda c: c.data in {"cfg_ical", "cfg_ha", "cfg_bus", "cfg_photo", "cfg_weather", "cfg_verse"}
+        func=lambda c: c.data in {"cfg_ical", "cfg_gh", "cfg_bus", "cfg_photo", "cfg_weather", "cfg_verse"}
     )
     def on_main_callbacks(c):
         if not allowed(c.from_user.id):
@@ -1195,14 +1081,16 @@ if TB:
                 chat_id,
                 f"현재 iCal URL:\n{current}\n새 URL을 입력하거나 /cancel 로 취소하세요.",
             )
-        elif c.data == "cfg_ha":
+        elif c.data == "cfg_gh":
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
-                telebot.types.InlineKeyboardButton("베이스 URL 입력", callback_data="ha_set_base"),
-                telebot.types.InlineKeyboardButton("토큰 입력", callback_data="ha_set_token"),
-                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="ha_show_config"),
+                telebot.types.InlineKeyboardButton("서비스 계정 키 경로", callback_data="gh_set_sa"),
+                telebot.types.InlineKeyboardButton("Agent User ID", callback_data="gh_set_agent"),
+                telebot.types.InlineKeyboardButton("허용 기기 타입", callback_data="gh_set_types"),
+                telebot.types.InlineKeyboardButton("허용 기기 ID", callback_data="gh_set_devices"),
+                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="gh_show_config"),
             )
-            TB.send_message(chat_id, "Home Assistant 설정을 선택하세요.", reply_markup=kb)
+            TB.send_message(chat_id, "Google Home 설정을 선택하세요.", reply_markup=kb)
         elif c.data == "cfg_bus":
             kb = telebot.types.InlineKeyboardMarkup(row_width=1)
             kb.add(
@@ -1232,8 +1120,11 @@ if TB:
             TB.send_message(chat_id, "오늘의 한마디를 입력해주세요. /cancel 로 취소할 수 있습니다.")
 
 
-    @TB.callback_query_handler(func=lambda c: c.data in {"ha_set_base", "ha_set_token", "ha_show_config"})
-    def on_home_assistant_callbacks(c):
+    @TB.callback_query_handler(
+        func=lambda c: c.data
+        in {"gh_set_sa", "gh_set_agent", "gh_set_types", "gh_set_devices", "gh_show_config"}
+    )
+    def on_google_home_callbacks(c):
         if not allowed(c.from_user.id):
             TB.answer_callback_query(c.id, "권한이 없습니다.")
             return
@@ -1241,24 +1132,40 @@ if TB:
         uid = c.from_user.id
         TB.answer_callback_query(c.id)
 
-        if c.data == "ha_set_base":
-            _set_state(uid, {"mode": "await_ha_base"})
-            TB.send_message(chat_id, "Home Assistant 베이스 URL을 입력하세요 (http/https). /cancel 로 취소")
-        elif c.data == "ha_set_token":
-            _set_state(uid, {"mode": "await_ha_token"})
-            TB.send_message(chat_id, "Home Assistant 장기 토큰을 입력하세요. /cancel 로 취소")
-        elif c.data == "ha_show_config":
-            cfg = _home_assistant_cfg()
-            base = cfg.get("base_url") or "설정안됨"
-            token = _mask_secret(cfg.get("token", ""))
-            dash = cfg.get("dashboard", {}) or {}
-            dash_txt = "설정안됨"
-            if dash.get("title") or dash.get("url_path"):
-                dash_txt = f"{dash.get('title') or dash.get('url_path')} ({dash.get('entity_count', 0)}개)"
+        if c.data == "gh_set_sa":
+            _set_state(uid, {"mode": "await_gh_sa"})
+            TB.send_message(
+                chat_id,
+                "Google Home 서비스 계정 JSON 파일 경로를 입력하세요. /cancel 로 취소",
+            )
+        elif c.data == "gh_set_agent":
+            _set_state(uid, {"mode": "await_gh_agent"})
+            TB.send_message(chat_id, "Google Home agentUserId 값을 입력하세요. /cancel 로 취소")
+        elif c.data == "gh_set_types":
+            _set_state(uid, {"mode": "await_gh_types"})
+            TB.send_message(
+                chat_id,
+                "허용할 기기 타입을 콤마로 구분해 입력하세요. 비우면 전체 허용. /cancel 로 취소",
+            )
+        elif c.data == "gh_set_devices":
+            _set_state(uid, {"mode": "await_gh_devices"})
+            TB.send_message(
+                chat_id,
+                "허용할 기기 ID를 콤마로 구분해 입력하세요. 비우면 전체 허용. /cancel 로 취소",
+            )
+        elif c.data == "gh_show_config":
+            cfg = CFG.get("google_home", {}) or {}
+            sa_file = cfg.get("service_account_file") or "설정안됨"
+            agent = cfg.get("agent_user_id") or "설정안됨"
+            types = cfg.get("include_types") or []
+            devices = cfg.get("include_devices") or []
+            type_txt = ", ".join(types) if types else "전체 허용"
+            dev_txt = ", ".join(devices) if devices else "전체 허용"
             lines = [
-                f"베이스 URL: {base}",
-                f"토큰: {token}",
-                f"대시보드: {dash_txt}",
+                f"서비스 계정 파일: {sa_file}",
+                f"agentUserId: {agent}",
+                f"허용 타입: {type_txt}",
+                f"허용 기기 ID: {dev_txt}",
             ]
             TB.send_message(chat_id, "\n".join(lines))
 
@@ -1435,23 +1342,28 @@ if TB:
             set_verse(text)
             _clear_state(uid)
             TB.reply_to(m, "오늘의 한마디가 저장되었습니다.")
-        elif mode == "await_ha_base":
-            if not re.match(r"^https?://", text, re.IGNORECASE):
-                TB.reply_to(m, "http:// 또는 https:// 로 시작하는 주소를 입력하세요.")
-                return
-            normalized = _normalize_base_url(text)
-            if not normalized:
-                TB.reply_to(m, "유효한 URL을 입력해주세요.")
-                return
-            CFG.setdefault("home_assistant", {})["base_url"] = normalized
+        elif mode == "await_gh_sa":
+            CFG.setdefault("google_home", {})["service_account_file"] = text
             save_config_to_source(CFG)
             _clear_state(uid)
-            TB.reply_to(m, f"Home Assistant URL 저장 완료: {normalized}")
-        elif mode == "await_ha_token":
-            CFG.setdefault("home_assistant", {})["token"] = text
+            TB.reply_to(m, "서비스 계정 경로가 저장되었습니다.")
+        elif mode == "await_gh_agent":
+            CFG.setdefault("google_home", {})["agent_user_id"] = text
             save_config_to_source(CFG)
             _clear_state(uid)
-            TB.reply_to(m, "토큰이 저장되었습니다.")
+            TB.reply_to(m, "agentUserId가 저장되었습니다.")
+        elif mode == "await_gh_types":
+            items = [seg.strip() for seg in re.split(r"[\s,]+", text) if seg.strip()]
+            CFG.setdefault("google_home", {})["include_types"] = items
+            save_config_to_source(CFG)
+            _clear_state(uid)
+            TB.reply_to(m, "허용 타입 목록이 저장되었습니다.")
+        elif mode == "await_gh_devices":
+            items = [seg.strip() for seg in re.split(r"[\s,]+", text) if seg.strip()]
+            CFG.setdefault("google_home", {})["include_devices"] = items
+            save_config_to_source(CFG)
+            _clear_state(uid)
+            TB.reply_to(m, "허용 기기 ID 목록이 저장되었습니다.")
         elif mode == "await_bus_key":
             CFG.setdefault("bus", {})["key"] = text
             save_config_to_source(CFG)

@@ -131,14 +131,15 @@ DEFAULT_CFG: Dict[str, Any] = {
         "webhook_base": "",
         "path_secret": "",
     },
-    "home_assistant": {
-        "base_url": "http://localhost:8123",
-        "token": "",
-        "verify_ssl": True,
-        "timeout": 5,
-        "include_domains": ["light", "switch"],
-        "include_entities": [],
-        "dashboard": {"url_path": "", "title": ""},
+    "google_home": {
+        "service_account_file": str(BASE / "google-home-service-account.json"),
+        "agent_user_id": "",
+        "timeout": 10,
+        "include_types": [
+            "action.devices.types.LIGHT",
+            "action.devices.types.SWITCH",
+        ],
+        "include_devices": [],
     },
     "bus": {"city_code": "", "node_id": "", "key": ""},
     "photos": {"album": "default"},
@@ -159,6 +160,12 @@ if not frame_cfg["calendars"] and frame_cfg.get("ical_url"):
     frame_cfg["calendars"] = [
         {"url": frame_cfg.get("ical_url", ""), "color": "#4b6bff"}
     ]
+
+google_cfg = CFG.setdefault("google_home", {})
+if not isinstance(google_cfg.get("include_types"), list):
+    google_cfg["include_types"] = []
+if not isinstance(google_cfg.get("include_devices"), list):
+    google_cfg["include_devices"] = []
 
 
 def get_verse() -> str:
