@@ -1,0 +1,41 @@
+bus:
+  city_code: '25'
+  key: 3d3d725df7c8daa3445ada3ceb7778d94328541e6eb616f02c0b82cb11ff182f
+  node_id: '40190'
+frame:
+  calendars:
+  - color: '#fff04d'
+    url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/priv>
+  ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/p>
+  tz: Asia/Seoul
+home_assistant:
+  base_url: http://localhost:8123
+  dashboard:
+    title: ''
+    url_path: ''
+  include_domains:
+  - light
+  - switch
+  include_entities: []
+  timeout: 5
+  token: ''
+  verify_ssl: true
+photos:
+  album: default
+server:
+  port: 5320
+telegram:
+  allowed_user_ids:
+  - 5517670242
+  bot_token: 8279263607:AAEzHxlSYMfsXwP7OpXWw5NB40VTCDfBlJw
+  mode: polling
+  path_secret: ''
+  webhook_base: ''
+todoist:
+  api_token: 0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b
+  project_id: ''
+weather:
+  api_key: 9809664c22a3501382380f2781e1a9da
+  location: Seoul, South Korea
+  provider: openweathermap
+  units: metric
