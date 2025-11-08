@@ -15,14 +15,14 @@ telegram:
   mode: polling
   webhook_base: ""
   path_secret: ""
-google_home:
-  service_account_file: /home/bokdol/smart-frame-477605-990075e9d3a0.json
-  agent_user_id: mangkoog@gmail.com
+home_assistant:
+  base_url: http://homeassistant.local:8123
+  token: ""
   timeout: 10
-  include_types:
-    - action.devices.types.LIGHT
-    - action.devices.types.SWITCH
-  include_devices: []
+  include_domains:
+    - light
+    - switch
+  include_entities: []
 bus:
   city_code: ""
   node_id: ""
