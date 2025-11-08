@@ -131,15 +131,15 @@ DEFAULT_CFG: Dict[str, Any] = {
         "webhook_base": "",
         "path_secret": "",
     },
-    "google_home": {
-        "service_account_file": "/home/bokdol/smart-frame-477605-990075e9d3a0.json",
-        "agent_user_id": "mangkoog@gmail.com",
+    "home_assistant": {
+        "base_url": "http://homeassistant.local:8123",
+        "token": "",
         "timeout": 10,
-        "include_types": [
-            "action.devices.types.LIGHT",
-            "action.devices.types.SWITCH",
+        "include_domains": [
+            "light",
+            "switch",
         ],
-        "include_devices": [],
+        "include_entities": [],
     },
     "bus": {"city_code": "", "node_id": "", "key": ""},
     "photos": {"album": "default"},
@@ -161,11 +161,11 @@ if not frame_cfg["calendars"] and frame_cfg.get("ical_url"):
         {"url": frame_cfg.get("ical_url", ""), "color": "#4b6bff"}
     ]
 
-google_cfg = CFG.setdefault("google_home", {})
-if not isinstance(google_cfg.get("include_types"), list):
-    google_cfg["include_types"] = []
-if not isinstance(google_cfg.get("include_devices"), list):
-    google_cfg["include_devices"] = []
+ha_cfg = CFG.setdefault("home_assistant", {})
+if not isinstance(ha_cfg.get("include_domains"), list):
+    ha_cfg["include_domains"] = []
+if not isinstance(ha_cfg.get("include_entities"), list):
+    ha_cfg["include_entities"] = []
 
 
 def get_verse() -> str:

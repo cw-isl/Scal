@@ -230,7 +230,7 @@
       </div>
       <div class="section-right">
         <div class="home blk">
-          <h3>Google Home</h3>
+          <h3>Home Assistant</h3>
           <div class="ha-grid" id="ha-grid"></div>
         </div>
       </div>
@@ -512,7 +512,7 @@ async function loadVerse(){
 }
 loadVerse(); setInterval(loadVerse, 10*1000);
 
-// ===== Google Home 제어 패널 =====
+// ===== Home Assistant 제어 패널 =====
 let haDevices = [];
 const haDevicesState = { loading:false, needConfig:false, message:'', fetchError:'', commandError:'', dashboardTitle:'' };
 
@@ -523,12 +523,12 @@ function renderHomeControls(){
 
   const heading = document.querySelector('.home h3');
   if(heading){
-    heading.textContent = haDevicesState.dashboardTitle ? `Google Home · ${haDevicesState.dashboardTitle}` : 'Google Home';
+    heading.textContent = haDevicesState.dashboardTitle ? `Home Assistant · ${haDevicesState.dashboardTitle}` : 'Home Assistant';
   }
 
   const statuses = [];
   if(haDevicesState.needConfig){
-    statuses.push(haDevicesState.message || 'Google Home 연동 설정이 필요합니다.');
+    statuses.push(haDevicesState.message || 'Home Assistant 연동 설정이 필요합니다.');
   }
   if(haDevicesState.fetchError){
     statuses.push('불러오기 오류: ' + haDevicesState.fetchError);
@@ -621,7 +621,7 @@ async function loadHomeDevices(){
     if(data.need_config){
       haDevices = [];
       haDevicesState.needConfig = true;
-      haDevicesState.message = data.message || 'Google Home 연동을 설정하세요.';
+      haDevicesState.message = data.message || 'Home Assistant 연동을 설정하세요.';
       haDevicesState.dashboardTitle = '';
       return;
     }

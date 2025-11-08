@@ -8,14 +8,14 @@ frame:
     url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
   ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
   tz: Asia/Seoul
-google_home:
-  agent_user_id: mangkoog@gmail.com
-  include_devices: []
-  include_types:
-  - action.devices.types.LIGHT
-  - action.devices.types.SWITCH
-  service_account_file: /home/bokdol/smart-frame-477605-990075e9d3a0.json
+home_assistant:
+  base_url: http://homeassistant.local:8123
+  include_domains:
+  - light
+  - switch
+  include_entities: []
   timeout: 10
+  token: 
 photos:
   album: default
 server:
