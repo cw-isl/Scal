@@ -113,7 +113,11 @@ def save_config_to_source(new_data: Dict[str, Any], file_path: Path | None = Non
 
 DEFAULT_CFG: Dict[str, Any] = {
     "server": {"port": 5320},
-    "frame": {"tz": "Asia/Seoul", "ical_url": ""},
+    "frame": {
+        "tz": "Asia/Seoul",
+        "ical_url": "",
+        "calendars": [],
+    },
     "weather": {
         "provider": "openweathermap",
         "api_key": "",
@@ -138,12 +142,23 @@ DEFAULT_CFG: Dict[str, Any] = {
     },
     "bus": {"city_code": "", "node_id": "", "key": ""},
     "photos": {"album": "default"},
+    "todoist": {"api_token": "", "project_id": ""},
 }
 
 CFG: Dict[str, Any] = load_config(DEFAULT_CFG)
 
 TZ = timezone(timedelta(hours=9)) if CFG["frame"].get("tz") == "Asia/Seoul" else timezone.utc
 TZ_NAME = "Asia/Seoul" if CFG["frame"].get("tz") == "Asia/Seoul" else "UTC"
+
+
+frame_cfg = CFG.setdefault("frame", {})
+if not isinstance(frame_cfg.get("calendars"), list):
+    frame_cfg["calendars"] = []
+
+if not frame_cfg["calendars"] and frame_cfg.get("ical_url"):
+    frame_cfg["calendars"] = [
+        {"url": frame_cfg.get("ical_url", ""), "color": "#4b6bff"}
+    ]
 
 
 def get_verse() -> str:

@@ -3,6 +3,7 @@ server:
 frame:
   tz: Asia/Seoul
   ical_url: ""
+  calendars: []
 weather:
   provider: openweathermap
   api_key: ""
@@ -32,3 +33,6 @@ bus:
   key: ""
 photos:
   album: default
+todoist:
+  api_token: ""
+  project_id: ""

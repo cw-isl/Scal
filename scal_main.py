@@ -44,10 +44,12 @@ from scal_app.config import (
 )
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
+from scal_app.services.todoist import fetch_tasks as fetch_todoist_tasks, TodoistAPIError
 from scal_app.templates import load_board_html, load_settings_html
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
-_ical_cache = {"url": None, "ts": 0.0, "events": []}
+_ical_cache: Dict[str, Dict[str, Any]] = {}
+DEFAULT_CAL_COLOR = "#4b6bff"
 
 def _fmt_ics_date(v: str) -> str:
     if not v:
@@ -79,16 +81,20 @@ def _parse_ics_basic(text: str):
 
 def fetch_ical(url: str):
     """Fetch ICS; use python-ics if available else fallback parser."""
-    global _ical_cache
     now = time.time()
     if not url:
         return []
-    if _ical_cache["url"] == url and now - _ical_cache["ts"] < 300:
-        return _ical_cache["events"]
-    r = requests.get(url, timeout=10); r.raise_for_status()
+
+    cached = _ical_cache.get(url)
+    if cached and now - cached.get("ts", 0.0) < 300:
+        return cached.get("events", [])
+
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
     text = r.text
     try:
         from ics import Calendar
+
         cal = Calendar(text)
         evs = []
         for ev in cal.events:
@@ -98,13 +104,66 @@ def fetch_ical(url: str):
             evs.append({"title": title, "start": start, "end": end})
     except Exception:
         evs = _parse_ics_basic(text)
+
     evs.sort(key=lambda x: (x.get("start", ""), x.get("title", "")))
-    _ical_cache = {"url": url, "ts": now, "events": evs}
+    _ical_cache[url] = {"ts": now, "events": evs}
+    # Keep cache small
+    if len(_ical_cache) > 6:
+        # Drop oldest entry
+        oldest_url = min(_ical_cache.items(), key=lambda item: item[1].get("ts", 0.0))[0]
+        if oldest_url != url:
+            _ical_cache.pop(oldest_url, None)
     return evs
 
 def month_filter(items, y, m):
     mm = f"{y:04d}-{m:02d}"
     return [e for e in items if (e.get("start", "").startswith(mm) or e.get("end", "").startswith(mm))]
+
+
+_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _normalize_color(value: str) -> str:
+    value = (value or "").strip()
+    if _COLOR_RE.match(value):
+        return value.lower()
+    return DEFAULT_CAL_COLOR
+
+
+def _calendar_entries() -> List[Dict[str, str]]:
+    frame_cfg = CFG.get("frame", {}) or {}
+    calendars = frame_cfg.get("calendars")
+    result: List[Dict[str, str]] = []
+    if isinstance(calendars, list):
+        for entry in calendars:
+            if not isinstance(entry, dict):
+                continue
+            url = (entry.get("url") or "").strip()
+            if not url:
+                continue
+            color = _normalize_color(entry.get("color") or DEFAULT_CAL_COLOR)
+            result.append({"url": url, "color": color})
+    if not result:
+        url = (frame_cfg.get("ical_url") or "").strip()
+        if url:
+            result.append({"url": url, "color": DEFAULT_CAL_COLOR})
+    return result[:3]
+
+
+def _primary_calendar_url() -> str:
+    calendars = _calendar_entries()
+    return calendars[0]["url"] if calendars else ""
+
+
+def _set_primary_calendar(url: str, *, color: Optional[str] = None) -> None:
+    frame_cfg = CFG.setdefault("frame", {})
+    normalized_color = _normalize_color(color or DEFAULT_CAL_COLOR)
+    if url:
+        frame_cfg["ical_url"] = url
+        frame_cfg["calendars"] = [{"url": url, "color": normalized_color}]
+    else:
+        frame_cfg["ical_url"] = ""
+        frame_cfg["calendars"] = []
 
 # Weather and air-quality helpers live in scal_app.services.weather
 
@@ -643,10 +702,14 @@ def _settings_snapshot() -> Dict[str, Any]:
     bus_cfg = CFG.get("bus", {}) or {}
     weather_cfg = CFG.get("weather", {}) or {}
     tg_cfg = CFG.get("telegram", {}) or {}
+    todo_cfg = CFG.get("todoist", {}) or {}
     allowed_ids = tg_cfg.get("allowed_user_ids") or []
     allowed_text = ", ".join(str(x) for x in allowed_ids)
     return {
-        "frame": {"ical_url": frame_cfg.get("ical_url", "")},
+        "frame": {
+            "ical_url": frame_cfg.get("ical_url", ""),
+            "calendars": _calendar_entries(),
+        },
         "home_assistant": {
             "base_url": ha_cfg.get("base_url", ""),
             "token": ha_cfg.get("token", ""),
@@ -664,6 +727,10 @@ def _settings_snapshot() -> Dict[str, Any]:
             "bot_token": tg_cfg.get("bot_token", ""),
             "allowed_user_ids": allowed_ids,
             "allowed_user_ids_text": allowed_text,
+        },
+        "todoist": {
+            "api_token": todo_cfg.get("api_token", ""),
+            "project_id": todo_cfg.get("project_id", ""),
         },
         "verse": {"text": get_verse()},
     }
@@ -718,9 +785,19 @@ def api_set_verse():
 # === [SECTION: REST API endpoints used by the board HTML] ====================
 @app.get("/api/todo")
 def api_todo():
-    """Return an empty Todo list placeholder for the board UI."""
-
-    return jsonify({"items": []})
+    cfg = CFG.get("todoist", {}) or {}
+    token = (cfg.get("api_token") or "").strip()
+    project = (cfg.get("project_id") or "").strip() or None
+    if not token:
+        return jsonify({"items": [], "need_config": True})
+    try:
+        tasks = fetch_todoist_tasks(token, project_id=project, limit=10, tz=TZ)
+    except TodoistAPIError as exc:
+        return jsonify({"items": [], "error": str(exc)})
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Todoist fetch failed: %s", exc, exc_info=True)
+        return jsonify({"items": [], "error": "할 일을 불러오지 못했습니다."}), 502
+    return jsonify({"items": tasks})
 
 
 # === [SECTION: Settings management endpoints] ================================
@@ -737,12 +814,40 @@ def api_update_settings():
 
     try:
         if "frame" in payload:
-            ical = (payload["frame"].get("ical_url") or "").strip()
-            if ical and not re.match(r"^https?://", ical, re.IGNORECASE):
-                errors.append("iCal URL은 http:// 또는 https:// 로 시작해야 합니다.")
+            section = payload["frame"] or {}
+            frame_cfg = CFG.setdefault("frame", {})
+            calendars_payload = section.get("calendars")
+            calendars: List[Dict[str, str]] = []
+            if isinstance(calendars_payload, list):
+                for entry in calendars_payload[:3]:
+                    if not isinstance(entry, dict):
+                        continue
+                    url = (entry.get("url") or "").strip()
+                    if not url:
+                        continue
+                    color = _normalize_color(entry.get("color") or DEFAULT_CAL_COLOR)
+                    calendars.append({"url": url, "color": color})
+
+            if calendars:
+                invalid = [c for c in calendars if not re.match(r"^https?://", c["url"], re.IGNORECASE)]
+                if invalid:
+                    errors.append("캘린더 URL은 http:// 또는 https:// 로 시작해야 합니다.")
+                else:
+                    frame_cfg["calendars"] = calendars
+                    frame_cfg["ical_url"] = calendars[0]["url"]
+                    updated = True
             else:
-                CFG.setdefault("frame", {})["ical_url"] = ical
-                updated = True
+                ical = (section.get("ical_url") or "").strip()
+                if ical:
+                    if not re.match(r"^https?://", ical, re.IGNORECASE):
+                        errors.append("iCal URL은 http:// 또는 https:// 로 시작해야 합니다.")
+                    else:
+                        _set_primary_calendar(ical)
+                        updated = True
+                else:
+                    if frame_cfg.get("ical_url") or frame_cfg.get("calendars"):
+                        _set_primary_calendar("")
+                        updated = True
 
         if "home_assistant" in payload:
             section = payload["home_assistant"] or {}
@@ -766,6 +871,12 @@ def api_update_settings():
             section = payload["weather"] or {}
             CFG.setdefault("weather", {})["api_key"] = (section.get("api_key") or "").strip()
             CFG.setdefault("weather", {})["location"] = (section.get("location") or "").strip()
+            updated = True
+
+        if "todoist" in payload:
+            section = payload["todoist"] or {}
+            CFG.setdefault("todoist", {})["api_token"] = (section.get("api_token") or "").strip()
+            CFG.setdefault("todoist", {})["project_id"] = (section.get("project_id") or "").strip()
             updated = True
 
         if "telegram" in payload:
@@ -817,8 +928,8 @@ def api_bus_search():
 
 @app.get("/api/events")
 def api_events():
-    url = CFG["frame"]["ical_url"]
-    if not url:
+    calendars = _calendar_entries()
+    if not calendars:
         return jsonify([])
     try:
         y = int(request.args.get("year")) if request.args.get("year") else None
@@ -828,8 +939,24 @@ def api_events():
     now_kst = datetime.now(TZ)
     y = y or now_kst.year
     m = m or now_kst.month
-    items = month_filter(fetch_ical(url), y, m)
-    return jsonify(items)
+    aggregated: List[Dict[str, Any]] = []
+    for idx, cal in enumerate(calendars):
+        url = cal["url"]
+        try:
+            events = fetch_ical(url)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Failed to fetch calendar %s: %s", url, exc)
+            continue
+        for ev in month_filter(events, y, m):
+            item = dict(ev)
+            item.setdefault("title", "(untitled)")
+            item.setdefault("start", "")
+            item.setdefault("end", item.get("start", ""))
+            item["color"] = cal["color"]
+            item["calendar_index"] = idx
+            aggregated.append(item)
+    aggregated.sort(key=lambda x: (x.get("start", ""), x.get("title", "")))
+    return jsonify(aggregated)
 
 @app.get("/api/weather")
 def api_weather():
@@ -1062,7 +1189,7 @@ if TB:
         TB.answer_callback_query(c.id)
 
         if c.data == "cfg_ical":
-            current = CFG.get("frame", {}).get("ical_url") or "(미설정)"
+            current = _primary_calendar_url() or "(미설정)"
             _set_state(uid, {"mode": "await_ical"})
             TB.send_message(
                 chat_id,
@@ -1300,7 +1427,7 @@ if TB:
             if not (text.startswith("http://") or text.startswith("https://")):
                 TB.reply_to(m, "http:// 또는 https:// 로 시작하는 URL을 입력하세요.")
                 return
-            CFG.setdefault("frame", {})["ical_url"] = text
+            _set_primary_calendar(text)
             save_config_to_source(CFG)
             _clear_state(uid)
             TB.reply_to(m, "iCal URL이 저장되었습니다. 보드는 잠시 후 갱신됩니다.")
