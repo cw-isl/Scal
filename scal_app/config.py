@@ -132,8 +132,8 @@ DEFAULT_CFG: Dict[str, Any] = {
         "path_secret": "",
     },
     "google_home": {
-        "service_account_file": str(BASE / "google-home-service-account.json"),
-        "agent_user_id": "",
+        "service_account_file": "/home/bokdol/smart-frame-477605-990075e9d3a0.json",
+        "agent_user_id": "mangkoog@gmail.com",
         "timeout": 10,
         "include_types": [
             "action.devices.types.LIGHT",
