@@ -15,18 +15,14 @@ telegram:
   mode: polling
   webhook_base: ""
   path_secret: ""
-home_assistant:
-  base_url: http://localhost:8123
-  token: ""
-  verify_ssl: true
-  timeout: 5
-  include_domains:
-    - light
-    - switch
-  include_entities: []
-  dashboard:
-    url_path: ""
-    title: ""
+google_home:
+  service_account_file: /root/scal/google-home-service-account.json
+  agent_user_id: ""
+  timeout: 10
+  include_types:
+    - action.devices.types.LIGHT
+    - action.devices.types.SWITCH
+  include_devices: []
 bus:
   city_code: ""
   node_id: ""
