@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "smart-frame-477605",
+  "private_key_id": "bd3b08979426c7452d615bae8f917cd8e480fd26",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDBbSaRsUY8hioO\nrWIaws7bgnM6QUzqhqZJ7QtO6Nf18xxY094aphqyPylu2Fo5I6XaIOyVA1lPhxm9\nJ5IDRTsOx2Z3fxphuD+C6VVmxECXZn2q9RO7ZaytEfCl0rHSnM8vR3LlN/z8zq4c\nFSwTDQIM/XwtxOmYEbS9R2PSSB/W2VN98NKWaWYjN1+59J7wLRGAAA+Q0n2N8pFD\nQa3GiO9fPHj1P4deBRCAQfarpsOkzrL86Jx3u0o9L4tXMXFn4Hutp2FcK09BWqYk\nGitOyl7+oBytoNMJwg2z2HtUQ7Ubc7appcyUJViDloJBygcWBzPh1chaz4ZC+s6r\nonyVlKl7AgMBAAECggEATwjFAjHv04o0hCPHWszvzhSq9Yo6Hfgf2UQQ41DT8WzB\nT/BeKABoFx4k1WR01TUiLxNV5/ti0lKPK1GQYWK3422Jilk2k+g/l0O1QBT/mX1o\n6uJSCjfcyyjx7ie9viORqq1knpF2f2wKC3KBPFWL2Xf39hGoKxlNAyw49vK+g8A4\n52KG8nZCcGvLCLC3m1xmL/c2A+J7Qa8Fdwe7cPG1JsE4s070Iz1IpOk6+khyNVp3\naTBw1PRiMIfMTyJ3YEks5HHvwF1jX5DRMABzOLgHU5mOYRYlMPAhLaVo7vi+8Fn8\n5AFJPik5QiGKgfLnRnMie7wH0OctyzgSAJfIcx3TBQKBgQD9yKnRoIJRqZ9keKoM\nw/kvMCH5iW+gw3RSYur6g+6rCXRUxXu6vpqhXHi82cy2/yzmNziskW/Pq/7hscYL\nYVlsFys3OrQesYZ6BerXWbT91hq1CNXwRhY8ONu+S1ftXgWsMA0hIaRdA3zpgRtm\nTZr0m94WZh6/3AIjKnn3G9INHQKBgQDDHY64EP0aKBfem+NdOXA04xEywp8t6i+1\npLKCU3qs4LjRN0IiTmuRbyD93VkodDNrLav6ppSteD5eS62Tr5z5q6vhh6emwFzV\nZZ19SvP3myompQCqzMJzQ8+4VR8PeMflnyG0L3+u3Ci24EOfMoY7TDIZ1Zx/Hqgg\nJyiY8zsFdwKBgQD8jG4CQBqvrX8C+tkuru8QuHN24gAGGbtuKSXxes1Nw7DSk1vX\nsMosfdthA9Um3rUNvDJX+LsuDNkuPDz7Ijtcx4moAnEwgjVyxOS4vXrRh/k34r0T\nyItkDqkOq+eqPYCjo4XNTK9GKKxrqqFboyrq9RmDbMh44TX3TNPmxva3OQKBgGEy\nLTFmTR8lj9Z144pCHbJK1vtpVjBiM8gRtlcTzM2n2IloNIqwdAdry4yLImnzkNW4\nV66yIuhTOQZyPpKObe015pafpBV+SACJ8S1EFEppQlMj6TQsckVHJ4fU53cmnLW3\nUuvWqY1q4OFQ0H7ShWmuqFqUPbRZijkSKLggmms7AoGBAI+zm5bngLMWUIgVrKch\nz3IikSFhkTjTxdtlahLW3JwfQz0cvJmMx8wuDmKnSdEgOwSJp0GPPgFLePFA8+ny\nmbNTi9s7Zk302MmgWq0GsejrIgyl8606drQtuYWjtW5Pi68+1zGOaPuqpKs89f8R\nSzMFko9t8d4hjo53buJkPrkU\n-----END PRIVATE KEY-----\n",
+  "client_email": "smartframe-homegraph@smart-frame-477605.iam.gserviceaccount.com",
+  "client_id": "112320356718552582126",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/smartframe-homegraph%40smart-frame-477605.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
