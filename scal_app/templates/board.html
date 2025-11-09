@@ -12,7 +12,8 @@
 
   /* Global layout */
   html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
-  .frame { width:var(--W); min-height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
+  .frame-wrapper { width:var(--W); min-height:var(--H); margin:0 auto; position:relative; }
+  .frame { width:var(--W); min-height:var(--H); display:flex; flex-direction:column; position:relative; }
 
   /* Background photo crossfade */
   .bg, .bg2 {
@@ -188,9 +189,41 @@
 .bg, .bg2 { z-index:-1; }
 .frame { position:relative; z-index:1; }
 
+  /* Rotated (clockwise 90deg) layout */
+  body.rotate-90 {
+    width:var(--H);
+    height:var(--W);
+    overflow:hidden;
+    touch-action:none;
+  }
+  body.rotate-90 .frame-wrapper {
+    width:var(--H);
+    height:var(--W);
+    margin:0;
+    position:absolute;
+    top:0;
+    left:var(--H);
+    transform:rotate(90deg);
+    transform-origin:top left;
+  }
+  body.rotate-90 .frame {
+    width:var(--W);
+    min-height:var(--H);
+  }
+  body.rotate-90 .bg,
+  body.rotate-90 .bg2 {
+    width:var(--H);
+    height:var(--W);
+    left:var(--H);
+    top:0;
+    transform:rotate(90deg);
+    transform-origin:top left;
+  }
+
 </style>
 </head>
 <body>
+<div class="frame-wrapper" id="frameWrapper">
 <div class="bg" id="bg1"></div>
 <div class="bg2" id="bg2"></div>
 
@@ -238,8 +271,18 @@
     <div class="weather blk" id="weather"></div>
   </div>
 </div>
+</div>
 
 <script>
+// Apply optional clockwise rotation when URL query contains rotate=right/cw/90
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const rot = (params.get('rotate') || params.get('orientation') || '').toLowerCase();
+  if (['90','90cw','cw','right','clockwise'].includes(rot)) {
+    document.body.classList.add('rotate-90');
+  }
+})();
+
 function z(n){return n<10?'0'+n:n}
 function tick(){
   const d=new Date();
