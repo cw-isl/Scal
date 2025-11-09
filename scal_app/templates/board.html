@@ -8,12 +8,15 @@
 <style>
   :root {
     --W:1080px;
-    --H:1920px;
+    --H:1828px;
     --top:70px;
-    --cal:780px;
-    --weather:320px;
-    --section-gap:24px;
-    --section-card-gap:calc(var(--section-gap) - 6px);
+    --cal:910px;
+    --weather:280px;
+    --layout-left:420px;
+    --section-gap:20px;
+    --section-card-gap:calc(var(--section-gap) - 4px);
+    --rot-angle:90deg;
+    --rot-scale:min(calc(100vw / var(--H)), calc(100vh / var(--W)));
   }
 
   /* Global layout */
@@ -27,21 +30,39 @@
   body {
     min-height:100vh;
     display:flex;
+    align-items:center;
     justify-content:center;
+    overflow:hidden;
+  }
+  body.rotate-ccw { --rot-angle:-90deg; }
+  body.rotate-none {
+    --rot-angle:0deg;
+    --rot-scale:1;
+  }
+  .frame-viewport {
+    position:relative;
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .frame-rotated {
+    width:var(--W);
+    height:var(--H);
+    transform:rotate(var(--rot-angle)) scale(var(--rot-scale));
+    transform-origin:center;
+    display:flex;
     align-items:flex-start;
-    padding:16px 0;
-    box-sizing:border-box;
+    justify-content:center;
   }
   .frame {
-    width:100vw;
-    max-width:var(--W);
+    width:var(--W);
     min-height:var(--H);
     margin:0 auto;
     display:flex;
     flex-direction:column;
     position:relative;
-    padding-bottom:var(--section-gap);
-    box-sizing:border-box;
   }
 
   /* Background photo crossfade */
@@ -86,16 +107,24 @@
   }
 
   .section-upper {
+    display:grid;
+    grid-template-columns:minmax(0, var(--layout-left)) minmax(0, 1fr);
+    gap:var(--section-card-gap);
+    align-items:stretch;
+  }
+
+  .section-left {
     display:flex;
     flex-direction:column;
     gap:var(--section-card-gap);
   }
 
-  .section-left,
   .section-right {
     display:flex;
     flex-direction:column;
     gap:var(--section-card-gap);
+    border-left:none;
+    padding-left:0;
   }
 
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
@@ -148,26 +177,30 @@
 /* Weather layout (card style 5-day forecast) */
   .weather {
     display:flex;
-    flex-direction:column;
-    gap:18px;
+    gap:16px;
     align-items:stretch;
-    padding:18px 18px 22px;
+    flex-wrap:wrap;
+    padding:14px 16px;
   }
   .weather .w-now {
     display:flex;
     align-items:center;
-    gap:14px;
-    min-width:0;
+    gap:12px;
+    min-width:220px;
+    flex:0 0 auto;
   }
   .weather .w-now .info { display:flex; flex-direction:column; gap:6px; }
-  .weather .w-now .temp { font-size:42px; font-weight:800; line-height:1; }
+  .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
   .weather .w-now .meta { display:flex; flex-direction:column; gap:4px; font-size:14px; opacity:.9; }
   .weather .w-now .meta span { display:flex; align-items:center; gap:6px; }
 
   .weather .w-days {
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(95px, 1fr));
+    grid-template-columns:repeat(5, minmax(0, 105px));
     gap:16px;
+    justify-content:flex-start;
+    flex:0 0 auto;
+    margin-right:auto;
   }
   .weather .w-day {
     text-align:center;
@@ -175,6 +208,7 @@
     border:1px solid rgba(255,255,255,.08);
     border-radius:12px;
     padding:6px 4px;
+    width:105px;
   }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
 .weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
@@ -184,6 +218,7 @@
 
 /* ▼ AQI card on the right */
   .weather .w-aqi {
+    width:105px;
     text-align:center;
     background:rgba(0,0,0,.25);
     border:1px solid rgba(255,255,255,.08);
@@ -193,6 +228,7 @@
     flex-direction:column;
     justify-content:center;
     gap:4px;
+    flex:0 0 auto;
   }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
 .weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
@@ -209,48 +245,52 @@
 <div class="bg" id="bg1"></div>
 <div class="bg2" id="bg2"></div>
 
-<div class="frame">
-  <div class="top">
-    <div class="time" id="clock">--:--</div>
-    <div class="date" id="datetxt">----</div>
-  </div>
+<div class="frame-viewport">
+  <div class="frame-rotated">
+    <div class="frame">
+      <div class="top">
+        <div class="time" id="clock">--:--</div>
+        <div class="date" id="datetxt">----</div>
+      </div>
 
-  <div class="cal">
-    <h2 id="cal-title">Calendar</h2>
-    <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
-    <div class="grid" id="grid"></div>
-  </div>
+      <div class="cal">
+        <h2 id="cal-title">Calendar</h2>
+        <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+        <div class="grid" id="grid"></div>
+      </div>
 
-  <div class="section">
-    <div class="section-upper">
-      <div class="section-left">
-        <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
-        <div class="todo blk">
-          <h3>Todo</h3>
-          <div class="rows">
-            <div class="col" id="todo-col-1"></div>
-            <div class="col" id="todo-col-2"></div>
+      <div class="section">
+        <div class="section-upper">
+          <div class="section-left">
+            <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
+            <div class="todo blk">
+              <h3>Todo</h3>
+              <div class="rows">
+                <div class="col" id="todo-col-1"></div>
+                <div class="col" id="todo-col-2"></div>
+              </div>
+            </div>
+            <div class="bus blk">
+              <div class="arrivals">
+                <h3 id="bus-title">BUS Info</h3>
+                <div class="stop" id="bus-stop"></div>
+                <div class="rows" id="businfo">
+                  <div class="col" id="bus-left"></div>
+                  <div class="col" id="bus-right"></div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="bus blk">
-          <div class="arrivals">
-            <h3 id="bus-title">BUS Info</h3>
-            <div class="stop" id="bus-stop"></div>
-            <div class="rows" id="businfo">
-              <div class="col" id="bus-left"></div>
-              <div class="col" id="bus-right"></div>
+          <div class="section-right">
+            <div class="home blk">
+              <h3>Home Assistant</h3>
+              <div class="ha-grid" id="ha-grid"></div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="section-right">
-        <div class="home blk">
-          <h3>Home Assistant</h3>
-          <div class="ha-grid" id="ha-grid"></div>
-        </div>
+        <div class="weather blk" id="weather"></div>
       </div>
     </div>
-    <div class="weather blk" id="weather"></div>
   </div>
 </div>
 
