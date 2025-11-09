@@ -729,16 +729,19 @@ setInterval(refreshBus,60000);
 let photoList = [];
 let pi = 0;           // 사진 인덱스
 let front = 1;        // 현재 보이는 레이어: 1=bg1, 2=bg2
+let photoSignature = '';
 
 const DISPLAY_INTERVAL_MS = 5000;
 const PRELOAD_MIN_COUNT   = 2;
 const PRELOAD_COOLDOWN_MS = 250;
+const PHOTO_REFRESH_INTERVAL_MS = 30000;
 
 let preloadQueue = [];     // [{ url, readyAt }]
 let isPreloading = false;
 let nextSwitchAt = 0;
 let slideTimer = null;
 let refillTimer = null;
+let isRefreshingPhotos = false;
 
 // --- 유틸: 세그먼트별 인코딩(하위 폴더 유지) -------------------------------
 function buildPhotoUrl(name){
@@ -755,14 +758,34 @@ function shuffle(arr){
 }
 
 // --- 목록 로드 --------------------------------------------------------------
-async function loadPhotos(){
+async function loadPhotos(force = false){
   try{
-    const r = await fetch('/api/photos');
-    photoList = await r.json();
-    shuffle(photoList);
+    const r = await fetch('/api/photos', { cache: 'no-store' });
+    if (!r.ok){
+      throw new Error(`HTTP ${r.status}`);
+    }
+    const list = await r.json();
+    const photos = Array.isArray(list) ? list.slice() : [];
+    const signature = photos.slice().sort().join('|');
+    if (!force && signature === photoSignature){
+      return false;
+    }
+    photoSignature = signature;
+    photoList = photos;
+    if (photoList.length){
+      shuffle(photoList);
+    }
+    pi = 0;
+    preloadQueue = [];
+    return true;
   }catch(e){
     console.error('[photos] load failed:', e);
-    photoList = [];
+    if (force){
+      photoList = [];
+      preloadQueue = [];
+      photoSignature = '';
+    }
+    return false;
   }
 }
 
@@ -848,11 +871,21 @@ function startPhotoTimers(){
   }
   if (!refillTimer){
     refillTimer = setInterval(async ()=>{
-      if (!photoList.length){
-        await loadPhotos();
+      if (isRefreshingPhotos){
+        return;
       }
-      ensurePreloaded();
-    }, 60 * 1000);
+      isRefreshingPhotos = true;
+      try{
+        const changed = await loadPhotos();
+        await ensurePreloaded();
+        if (changed){
+          nextSwitchAt = Date.now();
+          showNextPhoto();
+        }
+      }finally{
+        isRefreshingPhotos = false;
+      }
+    }, PHOTO_REFRESH_INTERVAL_MS);
   }
 }
 document.addEventListener('visibilitychange', ()=>{
@@ -868,7 +901,7 @@ document.addEventListener('visibilitychange', ()=>{
 (async ()=>{
   stopPhotoTimers();
 
-  await loadPhotos();
+  await loadPhotos(true);
   if (!photoList.length){
     return;
   }
