@@ -6,13 +6,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <title>Smart Frame</title>
 <style>
-  :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --weather:280px; --layout-left:420px; --section-gap:20px;
-          --section-card-gap:calc(var(--section-gap) - 4px); }
+  :root {
+    --W:1080px;
+    --H:1828px;
+    --top:70px;
+    --cal:910px;
+    --weather:280px;
+    --layout-left:420px;
+    --section-gap:20px;
+    --section-card-gap:calc(var(--section-gap) - 4px);
+    --rot-angle:90deg;
+    --rot-scale:min(calc(100vw / var(--H)), calc(100vh / var(--W)));
+  }
 
   /* Global layout */
-  html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
-  .frame { width:var(--W); min-height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
+  html,body {
+    margin:0;
+    padding:0;
+    background:transparent;
+    color:#fff;
+    font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif;
+  }
+  body {
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  body.rotate-ccw { --rot-angle:-90deg; }
+  body.rotate-none {
+    --rot-angle:0deg;
+    --rot-scale:1;
+  }
+  .frame-viewport {
+    position:relative;
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .frame-rotated {
+    width:var(--W);
+    height:var(--H);
+    transform:rotate(var(--rot-angle)) scale(var(--rot-scale));
+    transform-origin:center;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+  }
+  .frame {
+    width:var(--W);
+    min-height:var(--H);
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
 
   /* Background photo crossfade */
   .bg, .bg2 {
@@ -194,48 +245,52 @@
 <div class="bg" id="bg1"></div>
 <div class="bg2" id="bg2"></div>
 
-<div class="frame">
-  <div class="top">
-    <div class="time" id="clock">--:--</div>
-    <div class="date" id="datetxt">----</div>
-  </div>
+<div class="frame-viewport">
+  <div class="frame-rotated">
+    <div class="frame">
+      <div class="top">
+        <div class="time" id="clock">--:--</div>
+        <div class="date" id="datetxt">----</div>
+      </div>
 
-  <div class="cal">
-    <h2 id="cal-title">Calendar</h2>
-    <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
-    <div class="grid" id="grid"></div>
-  </div>
+      <div class="cal">
+        <h2 id="cal-title">Calendar</h2>
+        <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+        <div class="grid" id="grid"></div>
+      </div>
 
-  <div class="section">
-    <div class="section-upper">
-      <div class="section-left">
-        <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
-        <div class="todo blk">
-          <h3>Todo</h3>
-          <div class="rows">
-            <div class="col" id="todo-col-1"></div>
-            <div class="col" id="todo-col-2"></div>
+      <div class="section">
+        <div class="section-upper">
+          <div class="section-left">
+            <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
+            <div class="todo blk">
+              <h3>Todo</h3>
+              <div class="rows">
+                <div class="col" id="todo-col-1"></div>
+                <div class="col" id="todo-col-2"></div>
+              </div>
+            </div>
+            <div class="bus blk">
+              <div class="arrivals">
+                <h3 id="bus-title">BUS Info</h3>
+                <div class="stop" id="bus-stop"></div>
+                <div class="rows" id="businfo">
+                  <div class="col" id="bus-left"></div>
+                  <div class="col" id="bus-right"></div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="bus blk">
-          <div class="arrivals">
-            <h3 id="bus-title">BUS Info</h3>
-            <div class="stop" id="bus-stop"></div>
-            <div class="rows" id="businfo">
-              <div class="col" id="bus-left"></div>
-              <div class="col" id="bus-right"></div>
+          <div class="section-right">
+            <div class="home blk">
+              <h3>Home Assistant</h3>
+              <div class="ha-grid" id="ha-grid"></div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="section-right">
-        <div class="home blk">
-          <h3>Home Assistant</h3>
-          <div class="ha-grid" id="ha-grid"></div>
-        </div>
+        <div class="weather blk" id="weather"></div>
       </div>
     </div>
-    <div class="weather blk" id="weather"></div>
   </div>
 </div>
 
