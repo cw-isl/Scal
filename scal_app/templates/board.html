@@ -6,13 +6,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <title>Smart Frame</title>
 <style>
-  :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --weather:280px; --layout-left:420px; --section-gap:20px;
-          --section-card-gap:calc(var(--section-gap) - 4px); }
+  :root {
+    --W:1080px;
+    --H:1920px;
+    --top:70px;
+    --cal:780px;
+    --weather:320px;
+    --section-gap:24px;
+    --section-card-gap:calc(var(--section-gap) - 6px);
+  }
 
   /* Global layout */
-  html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
-  .frame { width:var(--W); min-height:var(--H); margin:0 auto; display:flex; flex-direction:column; position:relative; }
+  html,body {
+    margin:0;
+    padding:0;
+    background:transparent;
+    color:#fff;
+    font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif;
+  }
+  body {
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding:16px 0;
+    box-sizing:border-box;
+  }
+  .frame {
+    width:100vw;
+    max-width:var(--W);
+    min-height:var(--H);
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    padding-bottom:var(--section-gap);
+    box-sizing:border-box;
+  }
 
   /* Background photo crossfade */
   .bg, .bg2 {
@@ -56,24 +86,16 @@
   }
 
   .section-upper {
-    display:grid;
-    grid-template-columns:minmax(0, var(--layout-left)) minmax(0, 1fr);
-    gap:var(--section-card-gap);
-    align-items:stretch;
-  }
-
-  .section-left {
     display:flex;
     flex-direction:column;
     gap:var(--section-card-gap);
   }
 
+  .section-left,
   .section-right {
     display:flex;
     flex-direction:column;
     gap:var(--section-card-gap);
-    border-left:none;
-    padding-left:0;
   }
 
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
@@ -126,30 +148,26 @@
 /* Weather layout (card style 5-day forecast) */
   .weather {
     display:flex;
-    gap:16px;
+    flex-direction:column;
+    gap:18px;
     align-items:stretch;
-    flex-wrap:wrap;
-    padding:14px 16px;
+    padding:18px 18px 22px;
   }
   .weather .w-now {
     display:flex;
     align-items:center;
-    gap:12px;
-    min-width:220px;
-    flex:0 0 auto;
+    gap:14px;
+    min-width:0;
   }
   .weather .w-now .info { display:flex; flex-direction:column; gap:6px; }
-  .weather .w-now .temp { font-size:38px; font-weight:800; line-height:1; }
+  .weather .w-now .temp { font-size:42px; font-weight:800; line-height:1; }
   .weather .w-now .meta { display:flex; flex-direction:column; gap:4px; font-size:14px; opacity:.9; }
   .weather .w-now .meta span { display:flex; align-items:center; gap:6px; }
 
   .weather .w-days {
     display:grid;
-    grid-template-columns:repeat(5, minmax(0, 105px));
+    grid-template-columns:repeat(auto-fit, minmax(95px, 1fr));
     gap:16px;
-    justify-content:flex-start;
-    flex:0 0 auto;
-    margin-right:auto;
   }
   .weather .w-day {
     text-align:center;
@@ -157,7 +175,6 @@
     border:1px solid rgba(255,255,255,.08);
     border-radius:12px;
     padding:6px 4px;
-    width:105px;
   }
 .weather .w-day.today { outline:2px solid rgba(255,255,255,.35); outline-offset:-2px; }
 .weather .w-day img { width:52px; height:52px; display:block; margin:2px auto; }
@@ -167,7 +184,6 @@
 
 /* ▼ AQI card on the right */
   .weather .w-aqi {
-    width:105px;
     text-align:center;
     background:rgba(0,0,0,.25);
     border:1px solid rgba(255,255,255,.08);
@@ -177,7 +193,6 @@
     flex-direction:column;
     justify-content:center;
     gap:4px;
-    flex:0 0 auto;
   }
 .weather .w-aqi .ttl { font-size:12px; letter-spacing:.5px; opacity:.9; }
 .weather .w-aqi .idx { font-size:24px; font-weight:800; line-height:1; }
