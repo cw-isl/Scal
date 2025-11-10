@@ -32,8 +32,34 @@
   .bg2 { opacity: 0; }
 
   .top { height:var(--top); display:flex; align-items:center; justify-content:space-between; padding:0 24px; box-sizing:border-box; }
+  .top-right { display:flex; align-items:center; gap:12px; }
   .time { font-size:38px; font-weight:700; letter-spacing:1px; text-shadow:0 0 6px rgba(0,0,0,.65);}
   .date { font-size:22px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
+  .refresh-btn {
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,.35);
+    background:rgba(0,0,0,.35);
+    color:#fff;
+    font-size:16px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:background .2s ease, border-color .2s ease;
+    box-shadow:0 0 6px rgba(0,0,0,.45);
+  }
+  .refresh-btn:hover,
+  .refresh-btn:focus {
+    background:rgba(255,255,255,.18);
+    border-color:rgba(255,255,255,.6);
+    outline:none;
+    box-shadow:0 0 0 2px rgba(255,255,255,.25);
+  }
+  .refresh-btn:active {
+    transform:scale(.96);
+  }
 
   .cal { height:auto; min-height:var(--cal); padding:8px 20px calc(var(--section-gap)/2); box-sizing:border-box; display:flex; flex-direction:column; }
   .cal h2 { margin:0 0 8px 0; font-size:22px; opacity:.95; display:flex; align-items:center; gap:8px; text-shadow:0 0 6px rgba(0,0,0,.65);}
@@ -234,6 +260,43 @@
     background-size: cover;
   }
 
+  /* Rotated (counter-clockwise 90deg / left) layout */
+  body.rotate-neg-90 {
+    --W:1048px;
+    --H:1920px;
+    width:var(--H);
+    height:var(--W);
+    overflow:hidden;
+    touch-action:none;
+  }
+  body.rotate-neg-90 .frame-wrapper {
+    width:var(--H);
+    height:var(--W);
+    margin:0;
+    position:absolute;
+    top:var(--W);
+    left:0;
+    transform:rotate(-90deg);
+    transform-origin:top left;
+  }
+  body.rotate-neg-90 .frame {
+    width:var(--W);
+    min-height:var(--H);
+  }
+  body.rotate-neg-90 .bg,
+  body.rotate-neg-90 .bg2 {
+    width:100%;
+    height:100%;
+  }
+  body.rotate-neg-90 .bg.bg-landscape,
+  body.rotate-neg-90 .bg2.bg-landscape {
+    background-size: contain;
+  }
+  body.rotate-neg-90 .bg.bg-portrait,
+  body.rotate-neg-90 .bg2.bg-portrait {
+    background-size: cover;
+  }
+
 </style>
 </head>
 <body>
@@ -243,8 +306,11 @@
 
 <div class="frame">
   <div class="top">
-    <div class="time" id="clock">--:--</div>
     <div class="date" id="datetxt">----</div>
+    <div class="top-right">
+      <div class="time" id="clock">--:--</div>
+      <button type="button" class="refresh-btn" id="refreshButton" aria-label="새로고침">↻</button>
+    </div>
   </div>
 
   <div class="cal">
@@ -288,12 +354,14 @@
 </div>
 
 <script>
-// Apply optional clockwise rotation when URL query contains rotate=right/cw/90
+// Apply optional rotation when URL query contains rotate=right/cw/90 or left/ccw/-90
 (function(){
   const params = new URLSearchParams(window.location.search);
   const rot = (params.get('rotate') || params.get('orientation') || '').toLowerCase();
   if (['90','90cw','cw','right','clockwise'].includes(rot)) {
     document.body.classList.add('rotate-90');
+  } else if (['-90','90ccw','ccw','left','counterclockwise','270','270ccw','270cw'].includes(rot)) {
+    document.body.classList.add('rotate-neg-90');
   }
 })();
 
@@ -305,6 +373,13 @@ function tick(){
   document.getElementById('datetxt').textContent = d.getFullYear()+"."+z(d.getMonth()+1)+"."+z(d.getDate())+" ("+days[d.getDay()]+")";
 }
 setInterval(tick, 1000); tick();
+
+const refreshButton = document.getElementById('refreshButton');
+if (refreshButton) {
+  refreshButton.addEventListener('click', () => {
+    window.location.reload();
+  });
+}
 
 function startOfWeek(d){ const day=d.getDay(); const s=new Date(d); s.setDate(d.getDate()-day); s.setHours(0,0,0,0); return s; }
 
