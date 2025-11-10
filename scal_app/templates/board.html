@@ -19,8 +19,15 @@
   .bg, .bg2 {
     position: absolute; inset: 0; z-index: -1;
     background-size: cover; background-position: center center; background-repeat: no-repeat;
+    background-color:#000;
     transition: opacity 1s ease;
     pointer-events: none;
+  }
+  .bg.bg-landscape, .bg2.bg-landscape {
+    background-size: contain;
+  }
+  .bg.bg-portrait, .bg2.bg-portrait {
+    background-size: cover;
   }
   .bg2 { opacity: 0; }
 
@@ -217,8 +224,6 @@
   body.rotate-90 .bg2 {
     width:100%;
     height:100%;
-    background-size: contain;
-    background-color:#000;
   }
 
 </style>
@@ -780,7 +785,7 @@ const PRELOAD_MIN_COUNT   = 2;
 const PRELOAD_COOLDOWN_MS = 250;
 const PHOTO_REFRESH_INTERVAL_MS = 30000;
 
-let preloadQueue = [];     // [{ url, readyAt }]
+let preloadQueue = [];     // [{ url, readyAt, orientation }]
 let isPreloading = false;
 let nextSwitchAt = 0;
 let slideTimer = null;
@@ -799,6 +804,11 @@ function shuffle(arr){
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+function determineOrientation(width, height){
+  if (!width || !height) return 'portrait';
+  return width >= height ? 'landscape' : 'portrait';
 }
 
 // --- 목록 로드 --------------------------------------------------------------
@@ -838,15 +848,20 @@ function preloadOne(url){
   return new Promise((resolve)=>{
     const img = new Image();
     let done = false;
-    const finish = ok => { if (!done){ done = true; resolve(ok ? img : null); } };
+    const finalize = (result)=>{ if (!done){ done = true; resolve(result); } };
+    const buildResult = ()=>({
+      width: img.naturalWidth || img.width || 0,
+      height: img.naturalHeight || img.height || 0
+    });
     img.onload = ()=>{
+      const result = buildResult();
       if (img.decode){
-        img.decode().then(()=>finish(true)).catch(()=>finish(true));
+        img.decode().then(()=>finalize(result)).catch(()=>finalize(result));
       }else{
-        finish(true);
+        finalize(result);
       }
     };
-    img.onerror = ()=> finish(null);
+    img.onerror = ()=> finalize(null);
     img.src = url;
   });
 }
@@ -859,9 +874,10 @@ async function ensurePreloaded(){
     while (preloadQueue.length < PRELOAD_MIN_COUNT && photoList.length){
       const name = photoList[pi % photoList.length]; pi++;
       const url  = buildPhotoUrl(name);
-      const ok   = await preloadOne(url);
-      if (ok){
-        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS });
+      const meta = await preloadOne(url);
+      if (meta){
+        const orientation = determineOrientation(meta.width, meta.height);
+        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS, orientation });
       }
     }
   }finally{
@@ -870,8 +886,18 @@ async function ensurePreloaded(){
 }
 
 // --- 실제 전환 --------------------------------------------------------------
-function swapBackground(nextUrl){
+function applyBackgroundOrientation(el, orientation){
+  el.classList.remove('bg-landscape', 'bg-portrait');
+  if (orientation === 'landscape'){
+    el.classList.add('bg-landscape');
+  }else if (orientation === 'portrait'){
+    el.classList.add('bg-portrait');
+  }
+}
+
+function swapBackground(nextUrl, orientation){
   const incoming = document.getElementById(front === 1 ? 'bg2' : 'bg1'); // 들어올 레이어(현재 투명)
+  applyBackgroundOrientation(incoming, orientation);
   incoming.style.backgroundImage = `url("${nextUrl}")`;
   // reflow
   incoming.offsetHeight;
@@ -893,11 +919,11 @@ async function showNextPhoto(){
   const now = Date.now();
   if (now < nextSwitchAt) return;
 
-  const { url, readyAt } = preloadQueue[0];
+  const { url, readyAt, orientation } = preloadQueue[0];
   if (now < readyAt) return;
 
   preloadQueue.shift();
-  swapBackground(url);
+  swapBackground(url, orientation);
   nextSwitchAt = now + DISPLAY_INTERVAL_MS;
 
   // 백그라운드 프리로드
@@ -958,6 +984,7 @@ document.addEventListener('visibilitychange', ()=>{
   // 초기 1장 화면 세팅(큐에서 소비)
   if (preloadQueue[0]){
     const first = preloadQueue.shift();
+    applyBackgroundOrientation(b1, first.orientation);
     b1.style.backgroundImage = `url("${first.url}")`;
     b1.style.opacity = 1;
     b2.style.opacity = 0;
@@ -967,6 +994,7 @@ document.addEventListener('visibilitychange', ()=>{
 
   // 다음 전환용으로 숨김 레이어 미리 세팅(있다면)
   if (preloadQueue[0]){
+    applyBackgroundOrientation(b2, preloadQueue[0].orientation);
     b2.style.backgroundImage = `url("${preloadQueue[0].url}")`;
   }
 
