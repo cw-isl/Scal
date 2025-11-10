@@ -62,6 +62,27 @@ stop_service() {
     fi
 }
 
+cleanup_legacy_portal_service() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        log "systemctl을 찾을 수 없어 구형 Smart Portal 정리를 건너뜁니다."
+        return
+    fi
+
+    local service
+    for service in smart-portal.service smart_portal.service smartportal.service; do
+        if systemctl list-unit-files | grep -q "^$service"; then
+            log "구형 Smart Portal 서비스 비활성화: $service"
+            systemctl stop "$service" 2>/dev/null || true
+            systemctl disable "$service" 2>/dev/null || true
+            rm -f "/etc/systemd/system/$service"
+        elif [[ -f "/etc/systemd/system/$service" ]]; then
+            log "남아있는 서비스 파일 제거: $service"
+            rm -f "/etc/systemd/system/$service"
+        fi
+    done
+    systemctl daemon-reload || true
+}
+
 backup_existing_directory() {
     if [[ -d "$APP_DIR" ]]; then
         log "기존 디렉터리를 ${BACKUP_ARCHIVE} 로 백업"
@@ -116,6 +137,7 @@ reboot_system() {
 main() {
     ensure_dependencies
     stop_service
+    cleanup_legacy_portal_service
     backup_existing_directory
     clone_repository
     apply_permissions
