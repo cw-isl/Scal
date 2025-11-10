@@ -123,6 +123,23 @@ SERVICE
     systemctl enable --now "$SERVICE_NAME"
 }
 
+cleanup_legacy_portal_service() {
+    log "Checking for legacy Smart Portal service"
+    local service
+    for service in smart-portal.service smart_portal.service smartportal.service; do
+        if systemctl list-unit-files | grep -q "^$service"; then
+            log "Disabling legacy service: $service"
+            systemctl stop "$service" 2>/dev/null || true
+            systemctl disable "$service" 2>/dev/null || true
+            rm -f "/etc/systemd/system/$service"
+        elif [[ -f "/etc/systemd/system/$service" ]]; then
+            log "Removing stray service file: $service"
+            rm -f "/etc/systemd/system/$service"
+        fi
+    done
+    systemctl daemon-reload || true
+}
+
 main() {
     ensure_packages
     ensure_user
@@ -131,6 +148,7 @@ main() {
     chown -R "$APP_USER":"$APP_GROUP" "$APP_DIR"
     setup_virtualenv
     configure_app
+    cleanup_legacy_portal_service
     install_service
     log "Setup complete. Service status:"
     systemctl status "$SERVICE_NAME" --no-pager
