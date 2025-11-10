@@ -138,7 +138,9 @@
 
   .home{display:flex; flex-direction:column; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:20px 22px; min-height:360px; height:100%;}
   .home h3{margin-bottom:6px;}
-  .home .ha-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:6px;}
+  .home .ha-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; flex:1 1 auto; align-content:start; overflow:auto; padding-bottom:6px;}
+  body.rotate-90 .home .ha-grid,
+  body.rotate-neg-90 .home .ha-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
   .home .ha-device{display:flex; align-items:center; gap:14px; padding:18px 16px; border-radius:16px; background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.12); transition:background .2s, border-color .2s, box-shadow .2s, transform .2s; cursor:pointer; user-select:none; min-height:82px;}
   .home .ha-device .icon{font-size:30px;}
   .home .ha-device .meta{display:flex; flex-direction:column; gap:6px; align-items:flex-start; min-width:0;}
@@ -241,6 +243,7 @@
     left:var(--H);
     transform:rotate(90deg);
     transform-origin:top left;
+    overflow:hidden;
   }
   body.rotate-90 .frame {
     width:var(--W);
@@ -274,10 +277,11 @@
     height:var(--W);
     margin:0;
     position:absolute;
-    top:var(--W);
-    left:0;
+    top:0;
+    left:var(--W);
     transform:rotate(-90deg);
     transform-origin:top left;
+    overflow:hidden;
   }
   body.rotate-neg-90 .frame {
     width:var(--W);
