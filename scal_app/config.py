@@ -111,12 +111,75 @@ def save_config_to_source(new_data: Dict[str, Any], file_path: Path | None = Non
     _atomic_write(file_path, text)
 
 
+FRAME_LAYOUT_KEYS = (
+    "width",
+    "height",
+    "top",
+    "calendar",
+    "weather",
+    "layout_left",
+    "section_gap",
+)
+
+FRAME_LAYOUT_DEFAULTS: Dict[str, Dict[str, int]] = {
+    "portrait": {
+        "width": 1080,
+        "height": 1920,
+        "top": 90,
+        "calendar": 1020,
+        "weather": 320,
+        "layout_left": 460,
+        "section_gap": 26,
+    },
+    "landscape_right": {
+        "width": 1080,
+        "height": 1920,
+        "top": 90,
+        "calendar": 1020,
+        "weather": 320,
+        "layout_left": 460,
+        "section_gap": 26,
+    },
+    "landscape_left": {
+        "width": 1080,
+        "height": 1920,
+        "top": 90,
+        "calendar": 1020,
+        "weather": 320,
+        "layout_left": 460,
+        "section_gap": 26,
+    },
+}
+
+FRAME_ORIENTATION_ALIASES = {
+    "portrait": "portrait",
+    "default": "portrait",
+    "normal": "portrait",
+    "vertical": "portrait",
+    "landscape_right": "landscape_right",
+    "right": "landscape_right",
+    "rotate_90": "landscape_right",
+    "rotate90": "landscape_right",
+    "rotate-90": "landscape_left",
+    "cw": "landscape_right",
+    "clockwise": "landscape_right",
+    "landscape_left": "landscape_left",
+    "left": "landscape_left",
+    "rotate_-90": "landscape_left",
+    "rotate_neg_90": "landscape_left",
+    "rotate--90": "landscape_left",
+    "ccw": "landscape_left",
+    "counterclockwise": "landscape_left",
+}
+
+
 DEFAULT_CFG: Dict[str, Any] = {
     "server": {"port": 5320},
     "frame": {
         "tz": "Asia/Seoul",
         "ical_url": "",
         "calendars": [],
+        "layout": {k: v.copy() for k, v in FRAME_LAYOUT_DEFAULTS.items()},
     },
     "weather": {
         "provider": "openweathermap",
@@ -155,6 +218,81 @@ TZ_NAME = "Asia/Seoul" if CFG["frame"].get("tz") == "Asia/Seoul" else "UTC"
 frame_cfg = CFG.setdefault("frame", {})
 if not isinstance(frame_cfg.get("calendars"), list):
     frame_cfg["calendars"] = []
+
+layout_cfg = frame_cfg.setdefault("layout", {})
+for orient, defaults in FRAME_LAYOUT_DEFAULTS.items():
+    orient_cfg = layout_cfg.setdefault(orient, {})
+    for key, value in defaults.items():
+        orient_cfg.setdefault(key, value)
+
+
+def normalize_orientation(value: str | None) -> str:
+    key = (value or "").strip().lower()
+    key = key.replace(" ", "_").replace("-", "_")
+    while "__" in key:
+        key = key.replace("__", "_")
+    key = key.strip("_")
+    return FRAME_ORIENTATION_ALIASES.get(key, "portrait")
+
+
+def get_layout_for_orientation(orientation: str) -> Dict[str, int]:
+    key = normalize_orientation(orientation)
+    layout_cfg = CFG.setdefault("frame", {}).setdefault("layout", {})
+    result = FRAME_LAYOUT_DEFAULTS.get(key, {}).copy()
+    stored = layout_cfg.get(key, {})
+    if isinstance(stored, dict):
+        for field in FRAME_LAYOUT_KEYS:
+            value = stored.get(field)
+            if isinstance(value, (int, float)):
+                result[field] = int(value)
+            else:
+                try:
+                    if isinstance(value, str) and value.strip():
+                        result[field] = int(float(value))
+                except Exception:  # pragma: no cover - defensive
+                    continue
+    return result
+
+
+def update_layout_config(updates: Dict[str, Any]) -> bool:
+    if not isinstance(updates, dict):
+        return False
+    frame_cfg = CFG.setdefault("frame", {})
+    layout_cfg = frame_cfg.setdefault("layout", {})
+    changed = False
+    for name, payload in updates.items():
+        key = normalize_orientation(name)
+        if not isinstance(payload, dict):
+            continue
+        dest = layout_cfg.setdefault(key, {})
+        for field in FRAME_LAYOUT_KEYS:
+            if field not in payload:
+                continue
+            raw = payload[field]
+            try:
+                if raw is None or raw == "":
+                    continue
+                value = int(float(raw))
+            except Exception:
+                continue
+            if value <= 0:
+                continue
+            if dest.get(field) != value:
+                dest[field] = value
+                changed = True
+    return changed
+
+
+def frame_layout_snapshot() -> Dict[str, Dict[str, int]]:
+    layout_cfg = CFG.setdefault("frame", {}).setdefault("layout", {})
+    snapshot: Dict[str, Dict[str, int]] = {}
+    for orient in FRAME_LAYOUT_DEFAULTS.keys():
+        snapshot[orient] = get_layout_for_orientation(orient)
+    for orient, data in layout_cfg.items():
+        key = normalize_orientation(orient)
+        if key not in snapshot:
+            snapshot[key] = get_layout_for_orientation(key)
+    return snapshot
 
 if not frame_cfg["calendars"] and frame_cfg.get("ical_url"):
     frame_cfg["calendars"] = [

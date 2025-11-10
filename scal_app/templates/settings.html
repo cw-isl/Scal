@@ -159,6 +159,57 @@
     border-color:#4b6bff;
     box-shadow:0 0 0 3px rgba(75,107,255,0.18);
   }
+  .layout-groups {
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .layout-group {
+    border:1px solid rgba(75,107,255,0.12);
+    border-radius:14px;
+    padding:18px 20px;
+    background:#f5f7ff;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .layout-group h3 {
+    margin:0;
+    font-size:16px;
+    color:#22336b;
+  }
+  .layout-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px,1fr));
+    gap:12px;
+  }
+  .layout-field {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .layout-field label {
+    font-size:13px;
+    color:#36416b;
+    font-weight:600;
+  }
+  .layout-field input {
+    border:1px solid rgba(0,0,0,0.12);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:14px;
+  }
+  .layout-field input:focus {
+    outline:none;
+    border-color:#4b6bff;
+    box-shadow:0 0 0 3px rgba(75,107,255,0.18);
+  }
+  .layout-actions {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
   button, .btn {
     border:none;
     background:#4b6bff;
@@ -374,6 +425,119 @@
       </form>
     </section>
 
+    <section class="card" id="layout-card">
+      <h2>레이아웃 (박스 크기)</h2>
+      <p class="muted">화면 방향(회전 여부)에 따라 프레임 크기와 여백을 조절해 보드를 꽉 채우세요.</p>
+      <form data-section="frame_layout">
+        <div class="layout-groups">
+          <div class="layout-group" data-orientation="portrait">
+            <h3>세로 모드 (기본)</h3>
+            <div class="layout-grid">
+              <div class="layout-field">
+                <label for="layout-portrait-width">프레임 가로 (px)</label>
+                <input id="layout-portrait-width" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="width" placeholder="1080"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-height">프레임 세로 (px)</label>
+                <input id="layout-portrait-height" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="height" placeholder="1920"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-top">상단 헤더 높이 (px)</label>
+                <input id="layout-portrait-top" type="number" min="40" max="600" data-layout-input data-orientation="portrait" data-key="top" placeholder="90"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-calendar">캘린더 최소 높이 (px)</label>
+                <input id="layout-portrait-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="portrait" data-key="calendar" placeholder="1020"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-layout-left">왼쪽 영역 너비 (px)</label>
+                <input id="layout-portrait-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="portrait" data-key="layout_left" placeholder="460"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-section-gap">박스 간격 (px)</label>
+                <input id="layout-portrait-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="portrait" data-key="section_gap" placeholder="26"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-weather">날씨 영역 높이 (px)</label>
+                <input id="layout-portrait-weather" type="number" min="200" max="640" data-layout-input data-orientation="portrait" data-key="weather" placeholder="320"/>
+              </div>
+            </div>
+          </div>
+          <div class="layout-group" data-orientation="landscape_right">
+            <h3>오른쪽 회전 (시계 방향)</h3>
+            <div class="layout-grid">
+              <div class="layout-field">
+                <label for="layout-right-width">프레임 가로 (px)</label>
+                <input id="layout-right-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="width" placeholder="1080"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-height">프레임 세로 (px)</label>
+                <input id="layout-right-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="height" placeholder="1920"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-top">상단 헤더 높이 (px)</label>
+                <input id="layout-right-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_right" data-key="top" placeholder="90"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-calendar">캘린더 최소 높이 (px)</label>
+                <input id="layout-right-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_right" data-key="calendar" placeholder="1020"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-layout-left">왼쪽 영역 너비 (px)</label>
+                <input id="layout-right-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_right" data-key="layout_left" placeholder="460"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-section-gap">박스 간격 (px)</label>
+                <input id="layout-right-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_right" data-key="section_gap" placeholder="26"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-weather">날씨 영역 높이 (px)</label>
+                <input id="layout-right-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_right" data-key="weather" placeholder="320"/>
+              </div>
+            </div>
+          </div>
+          <div class="layout-group" data-orientation="landscape_left">
+            <h3>왼쪽 회전 (반시계 방향)</h3>
+            <div class="layout-grid">
+              <div class="layout-field">
+                <label for="layout-left-width">프레임 가로 (px)</label>
+                <input id="layout-left-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="width" placeholder="1080"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-height">프레임 세로 (px)</label>
+                <input id="layout-left-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="height" placeholder="1920"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-top">상단 헤더 높이 (px)</label>
+                <input id="layout-left-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_left" data-key="top" placeholder="90"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-calendar">캘린더 최소 높이 (px)</label>
+                <input id="layout-left-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_left" data-key="calendar" placeholder="1020"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-layout-left">왼쪽 영역 너비 (px)</label>
+                <input id="layout-left-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_left" data-key="layout_left" placeholder="460"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-section-gap">박스 간격 (px)</label>
+                <input id="layout-left-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_left" data-key="section_gap" placeholder="26"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-weather">날씨 영역 높이 (px)</label>
+                <input id="layout-left-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_left" data-key="weather" placeholder="320"/>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="layout-actions">
+          <button type="submit">저장</button>
+          <button type="button" class="btn-secondary" data-action="layout-reset">기본값 불러오기</button>
+          <span class="status" hidden></span>
+        </div>
+      </form>
+    </section>
+
     <section class="card" id="todoist-card">
       <h2>Todoist</h2>
       <form data-section="todoist">
@@ -567,12 +731,15 @@
 <script>
 const state = {
   config: null,
+  layoutDefaults: {},
 };
 
 const uploadQueue = [];
 const photoInput = document.getElementById('photo-upload');
 const photoDropzone = document.getElementById('photo-dropzone');
 const uploadSummary = document.getElementById('photo-upload-summary');
+const layoutInputs = Array.from(document.querySelectorAll('[data-layout-input]'));
+const layoutResetButton = document.querySelector('[data-action="layout-reset"]');
 
 function isImageFile(file) {
   if (!file) return false;
@@ -700,6 +867,9 @@ async function loadConfig() {
     if (!res.ok) throw new Error('설정을 불러오지 못했습니다.');
     const data = await res.json();
     state.config = data;
+    if (data?.frame?.layout_defaults) {
+      state.layoutDefaults = data.frame.layout_defaults;
+    }
     fillFields();
   } catch (err) {
     console.error(err);
@@ -720,6 +890,60 @@ function fillCalendarRows(frame) {
   });
 }
 
+function fillLayoutFields(layout, defaults) {
+  if (defaults && typeof defaults === 'object') {
+    state.layoutDefaults = defaults;
+  }
+  const values = layout && typeof layout === 'object' ? layout : {};
+  layoutInputs.forEach((input) => {
+    if (!input) return;
+    const orientation = input.dataset.orientation;
+    const key = input.dataset.key;
+    if (!orientation || !key) return;
+    const orientValues = values[orientation] || {};
+    const raw = orientValues[key];
+    if (raw === undefined || raw === null || Number.isNaN(Number(raw))) {
+      input.value = '';
+    } else {
+      input.value = String(raw);
+    }
+    const defaultsForOrientation = (state.layoutDefaults?.[orientation]) || {};
+    if (defaultsForOrientation[key] !== undefined) {
+      input.placeholder = String(defaultsForOrientation[key]);
+    }
+  });
+}
+
+function gatherLayoutData() {
+  const payload = {};
+  layoutInputs.forEach((input) => {
+    if (!input) return;
+    const orientation = input.dataset.orientation;
+    const key = input.dataset.key;
+    if (!orientation || !key) return;
+    const value = input.value.trim();
+    if (!value) return;
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) return;
+    if (!payload[orientation]) payload[orientation] = {};
+    payload[orientation][key] = number;
+  });
+  return payload;
+}
+
+function resetLayoutToDefaults() {
+  const defaults = state.layoutDefaults || {};
+  layoutInputs.forEach((input) => {
+    if (!input) return;
+    const orientation = input.dataset.orientation;
+    const key = input.dataset.key;
+    if (!orientation || !key) return;
+    const defaultsForOrientation = defaults[orientation] || {};
+    if (defaultsForOrientation[key] === undefined) return;
+    input.value = String(defaultsForOrientation[key]);
+  });
+}
+
 function fillFields() {
   if (!state.config) return;
   const { frame, home_assistant, bus, weather, telegram, verse, todoist } = state.config;
@@ -728,6 +952,7 @@ function fillFields() {
     if (el) el.value = value || '';
   };
   if (frame) fillCalendarRows(frame);
+  if (frame) fillLayoutFields(frame.layout, frame.layout_defaults);
   if (home_assistant) {
     setValue('ha-url', home_assistant.base_url);
     setValue('ha-token', home_assistant.token);
@@ -798,6 +1023,9 @@ async function submitSection(form) {
       })
       .filter(Boolean);
     payload[section] = { calendars };
+  } else if (section === 'frame_layout') {
+    const layout = gatherLayoutData();
+    payload.frame = { layout };
   } else if (section === 'home_assistant') {
     const data = gatherFormData(form);
     const toList = (raw) => {
@@ -850,6 +1078,13 @@ document.querySelectorAll('form[data-section]').forEach((form) => {
 Array.from(document.querySelectorAll('.secret-toggle')).forEach((btn) => {
   btn.addEventListener('click', () => toggleSecret(btn.dataset.toggle));
 });
+
+if (layoutResetButton) {
+  layoutResetButton.addEventListener('click', () => {
+    resetLayoutToDefaults();
+    setStatus('#layout-card', '기본값으로 변경되었습니다. 저장을 눌러 적용하세요.');
+  });
+}
 
 async function searchBusStops() {
   const keyword = document.getElementById('bus-search-keyword').value.trim();
