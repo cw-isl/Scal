@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <title>Smart Frame</title>
 <style>
-  :root { --W:1080px; --H:1828px; --top:70px; --cal:910px;
-          --weather:280px; --layout-left:420px; --section-gap:20px;
+  :root { --W:1080px; --H:1920px; --top:90px; --cal:1020px;
+          --weather:320px; --layout-left:460px; --section-gap:26px;
           --section-card-gap:calc(var(--section-gap) - 4px); }
 
   /* Global layout */
@@ -227,8 +227,6 @@
 
   /* Rotated (clockwise 90deg) layout */
   body.rotate-90 {
-    --W:1048px;
-    --H:1920px;
     width:var(--H);
     height:var(--W);
     overflow:hidden;
@@ -265,8 +263,6 @@
 
   /* Rotated (counter-clockwise 90deg / left) layout */
   body.rotate-neg-90 {
-    --W:1048px;
-    --H:1920px;
     width:var(--H);
     height:var(--W);
     overflow:hidden;
@@ -368,6 +364,39 @@
     document.body.classList.add('rotate-neg-90');
   }
 })();
+
+async function applyLayoutFromConfig(){
+  const root = document.documentElement;
+  const orientation = document.body.classList.contains('rotate-90')
+    ? 'landscape_right'
+    : (document.body.classList.contains('rotate-neg-90') ? 'landscape_left' : 'portrait');
+  try {
+    const res = await fetch(`/api/frame-layout?orientation=${orientation}`);
+    if (!res.ok) throw new Error('layout load failed');
+    const data = await res.json();
+    const layout = data && data.layout ? data.layout : {};
+    const map = {
+      width: '--W',
+      height: '--H',
+      top: '--top',
+      calendar: '--cal',
+      weather: '--weather',
+      layout_left: '--layout-left',
+      section_gap: '--section-gap'
+    };
+    Object.entries(map).forEach(([key, cssVar]) => {
+      if (layout[key] !== undefined && layout[key] !== null && !Number.isNaN(Number(layout[key]))) {
+        const value = `${Number(layout[key])}px`;
+        root.style.setProperty(cssVar, value);
+        document.body.style.setProperty(cssVar, value);
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to load frame layout settings:', err);
+  }
+}
+
+applyLayoutFromConfig();
 
 function z(n){return n<10?'0'+n:n}
 function tick(){

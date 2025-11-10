@@ -41,6 +41,11 @@ from scal_app.config import (
     save_config_to_source,
     load_state,
     save_state,
+    FRAME_LAYOUT_DEFAULTS,
+    frame_layout_snapshot,
+    get_layout_for_orientation,
+    normalize_orientation,
+    update_layout_config,
 )
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
@@ -548,6 +553,8 @@ def _settings_snapshot() -> Dict[str, Any]:
         "frame": {
             "ical_url": frame_cfg.get("ical_url", ""),
             "calendars": _calendar_entries(),
+            "layout": frame_layout_snapshot(),
+            "layout_defaults": {name: vals.copy() for name, vals in FRAME_LAYOUT_DEFAULTS.items()},
         },
         "home_assistant": {
             "base_url": ha_cfg.get("base_url", ""),
@@ -647,6 +654,22 @@ def api_get_settings():
     return jsonify(_settings_snapshot())
 
 
+@app.get("/api/frame-layout")
+def api_frame_layout():
+    orientation = request.args.get("orientation", "portrait")
+    key = normalize_orientation(orientation)
+    layout = get_layout_for_orientation(key)
+    defaults = FRAME_LAYOUT_DEFAULTS.get(key, {})
+    return jsonify(
+        {
+            "orientation": key,
+            "layout": layout,
+            "defaults": defaults,
+            "all": {name: vals for name, vals in FRAME_LAYOUT_DEFAULTS.items()},
+        }
+    )
+
+
 @app.post("/api/settings")
 def api_update_settings():
     payload = request.get_json(silent=True) or {}
@@ -689,6 +712,11 @@ def api_update_settings():
                     if frame_cfg.get("ical_url") or frame_cfg.get("calendars"):
                         _set_primary_calendar("")
                         updated = True
+
+            layout_payload = section.get("layout")
+            if isinstance(layout_payload, dict):
+                if update_layout_config(layout_payload):
+                    updated = True
 
         if "home_assistant" in payload:
             section = payload["home_assistant"] or {}
