@@ -428,6 +428,7 @@
     <section class="card" id="layout-card">
       <h2>레이아웃 (박스 크기)</h2>
       <p class="muted">화면 방향(회전 여부)에 따라 프레임 크기와 여백을 조절해 보드를 꽉 채우세요.</p>
+      <p class="muted">배경 위치 값은 0%는 왼쪽/위쪽, 100%는 오른쪽/아래쪽을 의미합니다.</p>
       <form data-section="frame_layout">
         <div class="layout-groups">
           <div class="layout-group" data-orientation="portrait">
@@ -460,6 +461,14 @@
               <div class="layout-field">
                 <label for="layout-portrait-weather">날씨 영역 높이 (px)</label>
                 <input id="layout-portrait-weather" type="number" min="200" max="640" data-layout-input data-orientation="portrait" data-key="weather" placeholder="320"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-bg-x">배경 가로 위치 (%)</label>
+                <input id="layout-portrait-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_x" placeholder="50"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-portrait-bg-y">배경 세로 위치 (%)</label>
+                <input id="layout-portrait-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_y" placeholder="50"/>
               </div>
             </div>
           </div>
@@ -494,6 +503,14 @@
                 <label for="layout-right-weather">날씨 영역 높이 (px)</label>
                 <input id="layout-right-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_right" data-key="weather" placeholder="320"/>
               </div>
+              <div class="layout-field">
+                <label for="layout-right-bg-x">배경 가로 위치 (%)</label>
+                <input id="layout-right-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_x" placeholder="50"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-right-bg-y">배경 세로 위치 (%)</label>
+                <input id="layout-right-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_y" placeholder="50"/>
+              </div>
             </div>
           </div>
           <div class="layout-group" data-orientation="landscape_left">
@@ -526,6 +543,14 @@
               <div class="layout-field">
                 <label for="layout-left-weather">날씨 영역 높이 (px)</label>
                 <input id="layout-left-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_left" data-key="weather" placeholder="320"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-bg-x">배경 가로 위치 (%)</label>
+                <input id="layout-left-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_x" placeholder="50"/>
+              </div>
+              <div class="layout-field">
+                <label for="layout-left-bg-y">배경 세로 위치 (%)</label>
+                <input id="layout-left-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_y" placeholder="50"/>
               </div>
             </div>
           </div>
@@ -924,7 +949,13 @@ function gatherLayoutData() {
     const value = input.value.trim();
     if (!value) return;
     const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return;
+    if (!Number.isFinite(number)) return;
+    const isBgPos = key.startsWith('bg_pos_');
+    if (isBgPos) {
+      if (number < 0 || number > 100) return;
+    } else if (number <= 0) {
+      return;
+    }
     if (!payload[orientation]) payload[orientation] = {};
     payload[orientation][key] = number;
   });

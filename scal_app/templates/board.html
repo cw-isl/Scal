@@ -8,6 +8,7 @@
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:1020px;
           --weather:320px; --layout-left:460px; --section-gap:26px;
+          --bg-pos-x:50%; --bg-pos-y:50%;
           --section-card-gap:calc(var(--section-gap) - 4px); }
 
   /* Global layout */
@@ -27,9 +28,9 @@
     max-height: var(--H);
     transform: translate(-50%, -50%);
     object-fit: contain;
-    object-position: center;
+    object-position: var(--bg-pos-x) var(--bg-pos-y);
     background-size: contain;
-    background-position: center center;
+    background-position: var(--bg-pos-x) var(--bg-pos-y);
     background-repeat: no-repeat;
     background-color:#000;
     transition: opacity 1s ease;
@@ -388,11 +389,14 @@ async function applyLayoutFromConfig(){
       calendar: '--cal',
       weather: '--weather',
       layout_left: '--layout-left',
-      section_gap: '--section-gap'
+      section_gap: '--section-gap',
+      bg_pos_x: '--bg-pos-x',
+      bg_pos_y: '--bg-pos-y'
     };
     Object.entries(map).forEach(([key, cssVar]) => {
       if (layout[key] !== undefined && layout[key] !== null && !Number.isNaN(Number(layout[key]))) {
-        const value = `${Number(layout[key])}px`;
+        const unit = key.startsWith('bg_pos_') ? '%' : 'px';
+        const value = `${Number(layout[key])}${unit}`;
         root.style.setProperty(cssVar, value);
         document.body.style.setProperty(cssVar, value);
       }
