@@ -9,13 +9,13 @@ frame:
   ical_url: https://calendar.google.com/calendar/ical/bob.gondrae%40gmail.com/private-00822d9dbbe3140b9253bf2e0bda95c6/basic.ics
   tz: Asia/Seoul
 home_assistant:
-  base_url: http://homeassistant.local:8123
+  base_url: https://ttms03.duckdns.org:8123
   include_domains:
   - light
   - switch
   include_entities: []
   timeout: 10
-  token: 
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIxZGM5ZmNhYTdkOWI0NjY3ODUwOTE3YWY1OWQ4ZmQ4MCIsImlhdCI6MTc2MjY5MzQ0MiwiZXhwIjoyMDc4MDUzNDQyfQ.W31IUeaQwCgbQTlMWxiRFPikpQKqaWMydMFVlnqDyBY
 photos:
   album: default
 server:
