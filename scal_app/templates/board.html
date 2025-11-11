@@ -17,25 +17,39 @@
 
   /* Background photo crossfade */
   .bg, .bg2 {
-    position: absolute; inset: 0; z-index: -1;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: -1;
+    width: var(--W);
+    height: var(--H);
+    max-width: var(--W);
+    max-height: var(--H);
+    transform: translate(-50%, -50%);
+    object-fit: contain;
     object-position: center;
-    background-size: cover;
+    background-size: contain;
     background-position: center center;
     background-repeat: no-repeat;
     background-color:#000;
     transition: opacity 1s ease;
     pointer-events: none;
   }
-  .bg.bg-landscape, .bg2.bg-landscape {
-    object-fit: contain;
-    background-size: contain;
+  .bg.bg-landscape,
+  .bg.bg-sideways,
+  .bg2.bg-landscape,
+  .bg2.bg-sideways {
+    width: var(--W);
+    height: auto;
+    max-width: var(--W);
+    max-height: none;
   }
-  .bg.bg-portrait, .bg2.bg-portrait {
-    object-fit: cover;
-    background-size: cover;
+  .bg.bg-portrait,
+  .bg2.bg-portrait {
+    height: var(--H);
+    width: auto;
+    max-height: var(--H);
+    max-width: none;
   }
   .bg2 { opacity: 0; }
 
@@ -257,16 +271,24 @@
   }
   body.rotate-90 .bg,
   body.rotate-90 .bg2 {
-    width:100%;
-    height:100%;
+    max-width: var(--H);
+    max-height: var(--W);
   }
   body.rotate-90 .bg.bg-landscape,
-  body.rotate-90 .bg2.bg-landscape {
-    background-size: contain;
+  body.rotate-90 .bg.bg-sideways,
+  body.rotate-90 .bg2.bg-landscape,
+  body.rotate-90 .bg2.bg-sideways {
+    width: var(--H);
+    height: auto;
+    max-width: var(--H);
+    max-height: none;
   }
   body.rotate-90 .bg.bg-portrait,
   body.rotate-90 .bg2.bg-portrait {
-    background-size: cover;
+    height: var(--W);
+    width: auto;
+    max-height: var(--W);
+    max-width: none;
   }
 
   /* Rotated (counter-clockwise 90deg / left) layout */
@@ -293,16 +315,24 @@
   }
   body.rotate-neg-90 .bg,
   body.rotate-neg-90 .bg2 {
-    width:100%;
-    height:100%;
+    max-width: var(--H);
+    max-height: var(--W);
   }
   body.rotate-neg-90 .bg.bg-landscape,
-  body.rotate-neg-90 .bg2.bg-landscape {
-    background-size: contain;
+  body.rotate-neg-90 .bg.bg-sideways,
+  body.rotate-neg-90 .bg2.bg-landscape,
+  body.rotate-neg-90 .bg2.bg-sideways {
+    width: var(--H);
+    height: auto;
+    max-width: var(--H);
+    max-height: none;
   }
   body.rotate-neg-90 .bg.bg-portrait,
   body.rotate-neg-90 .bg2.bg-portrait {
-    background-size: cover;
+    height: var(--W);
+    width: auto;
+    max-height: var(--W);
+    max-width: none;
   }
 
 </style>
@@ -936,10 +966,10 @@ function isExifOrientationSideways(exifOrientation){
 }
 
 function determineOrientation(width, height, exifOrientation){
-  if (!width || !height) return 'portrait';
   if (isExifOrientationSideways(exifOrientation)){
-    [width, height] = [height, width];
+    return 'sideways';
   }
+  if (!width || !height) return 'portrait';
   return width >= height ? 'landscape' : 'portrait';
 }
 
@@ -1157,11 +1187,13 @@ async function ensurePreloaded(){
 
 // --- 실제 전환 --------------------------------------------------------------
 function applyBackgroundOrientation(el, orientation){
-  el.classList.remove('bg-landscape', 'bg-portrait');
+  el.classList.remove('bg-landscape', 'bg-portrait', 'bg-sideways');
   if (orientation === 'landscape'){
     el.classList.add('bg-landscape');
   }else if (orientation === 'portrait'){
     el.classList.add('bg-portrait');
+  }else if (orientation === 'sideways'){
+    el.classList.add('bg-sideways');
   }
 }
 
