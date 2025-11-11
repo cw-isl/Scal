@@ -915,6 +915,7 @@ let nextSwitchAt = 0;
 let slideTimer = null;
 let refillTimer = null;
 let isRefreshingPhotos = false;
+const exifOrientationCache = new Map();
 
 // --- 유틸: 세그먼트별 인코딩(하위 폴더 유지) -------------------------------
 function buildPhotoUrl(name){
@@ -930,9 +931,145 @@ function shuffle(arr){
   }
 }
 
-function determineOrientation(width, height){
+function isExifOrientationSideways(exifOrientation){
+  return exifOrientation === 5 || exifOrientation === 6 || exifOrientation === 7 || exifOrientation === 8;
+}
+
+function determineOrientation(width, height, exifOrientation){
   if (!width || !height) return 'portrait';
+  if (isExifOrientationSideways(exifOrientation)){
+    [width, height] = [height, width];
+  }
   return width >= height ? 'landscape' : 'portrait';
+}
+
+async function readExifOrientation(url){
+  if (!url) return null;
+  if (exifOrientationCache.has(url)){
+    return exifOrientationCache.get(url);
+  }
+
+  try{
+    const buffer = await fetchExifBytes(url);
+    const orientation = extractExifOrientation(new DataView(buffer));
+    exifOrientationCache.set(url, orientation);
+    return orientation;
+  }catch(err){
+    console.warn('[photos] exif parse failed:', err);
+    exifOrientationCache.set(url, null);
+    return null;
+  }
+}
+
+async function fetchExifBytes(url){
+  let partialResponse = null;
+  try{
+    partialResponse = await fetch(url, { headers: { Range: 'bytes=0-65535' } });
+  }catch(e){
+    partialResponse = null;
+  }
+
+  if (partialResponse){
+    if (partialResponse.status === 206 || partialResponse.status === 200){
+      return partialResponse.arrayBuffer();
+    }
+    if (partialResponse.status !== 416){
+      throw new Error(`HTTP ${partialResponse.status}`);
+    }
+  }
+
+  const fullResponse = await fetch(url);
+  if (!fullResponse.ok){
+    throw new Error(`HTTP ${fullResponse.status}`);
+  }
+  return fullResponse.arrayBuffer();
+}
+
+function extractExifOrientation(view){
+  if (!view || view.byteLength < 4) return null;
+  let offset = 0;
+  const length = view.byteLength;
+
+  if (view.getUint16(offset) !== 0xffd8){
+    return null;
+  }
+  offset += 2;
+
+  while (offset + 4 <= length){
+    const marker = view.getUint16(offset);
+    offset += 2;
+
+    const size = view.getUint16(offset);
+    offset += 2;
+    if (size < 2 || offset + size - 2 > length){
+      break;
+    }
+
+    if (marker === 0xffe1){
+      const exifHeader = getString(view, offset, 4);
+      if (exifHeader === 'Exif'){
+        const orientation = parseExifBlock(view, offset + 6, size - 8);
+        if (orientation) return orientation;
+      }
+    }
+
+    offset += size - 2;
+  }
+
+  return null;
+}
+
+function getString(view, start, length){
+  let out = '';
+  for (let i = 0; i < length && start + i < view.byteLength; i++){
+    const charCode = view.getUint8(start + i);
+    if (charCode === 0) break;
+    out += String.fromCharCode(charCode);
+  }
+  return out;
+}
+
+function parseExifBlock(view, start, size){
+  if (size <= 0 || start + size > view.byteLength) return null;
+
+  const tiffStart = start;
+  const byteOrder = view.getUint16(tiffStart);
+  const littleEndian = byteOrder === 0x4949;
+  if (!littleEndian && byteOrder !== 0x4d4d){
+    return null;
+  }
+
+  const getUint16 = (pos)=> view.getUint16(pos, littleEndian);
+  const getUint32 = (pos)=> view.getUint32(pos, littleEndian);
+
+  if (getUint16(tiffStart + 2) !== 0x002a){
+    return null;
+  }
+
+  const ifdOffset = getUint32(tiffStart + 4);
+  if (ifdOffset < 8 || tiffStart + ifdOffset + 2 > view.byteLength){
+    return null;
+  }
+
+  let dirOffset = tiffStart + ifdOffset;
+  const numEntries = getUint16(dirOffset);
+  dirOffset += 2;
+
+  for (let i = 0; i < numEntries; i++){
+    const entryOffset = dirOffset + i * 12;
+    if (entryOffset + 12 > view.byteLength){
+      break;
+    }
+    const tag = getUint16(entryOffset);
+    if (tag === 0x0112){
+      const value = getUint16(entryOffset + 8);
+      if (value >= 1 && value <= 8){
+        return value;
+      }
+    }
+  }
+
+  return null;
 }
 
 // --- 목록 로드 --------------------------------------------------------------
@@ -977,12 +1114,21 @@ function preloadOne(url){
       width: img.naturalWidth || img.width || 0,
       height: img.naturalHeight || img.height || 0
     });
+    const orientationPromise = readExifOrientation(url).catch(()=>null);
     img.onload = ()=>{
       const result = buildResult();
+      const afterDecode = ()=>{
+        orientationPromise
+          .then((exifOrientation)=>{
+            result.exifOrientation = exifOrientation;
+            finalize(result);
+          })
+          .catch(()=>finalize(result));
+      };
       if (img.decode){
-        img.decode().then(()=>finalize(result)).catch(()=>finalize(result));
+        img.decode().then(afterDecode).catch(afterDecode);
       }else{
-        finalize(result);
+        afterDecode();
       }
     };
     img.onerror = ()=> finalize(null);
@@ -1000,7 +1146,7 @@ async function ensurePreloaded(){
       const url  = buildPhotoUrl(name);
       const meta = await preloadOne(url);
       if (meta){
-        const orientation = determineOrientation(meta.width, meta.height);
+        const orientation = determineOrientation(meta.width, meta.height, meta.exifOrientation);
         preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS, orientation, width: meta.width, height: meta.height });
       }
     }
