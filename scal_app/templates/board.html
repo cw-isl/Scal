@@ -18,15 +18,23 @@
   /* Background photo crossfade */
   .bg, .bg2 {
     position: absolute; inset: 0; z-index: -1;
-    background-size: cover; background-position: center center; background-repeat: no-repeat;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
     background-color:#000;
     transition: opacity 1s ease;
     pointer-events: none;
   }
   .bg.bg-landscape, .bg2.bg-landscape {
+    object-fit: contain;
     background-size: contain;
   }
   .bg.bg-portrait, .bg2.bg-portrait {
+    object-fit: cover;
     background-size: cover;
   }
   .bg2 { opacity: 0; }
@@ -301,8 +309,8 @@
 </head>
 <body>
 <div class="frame-wrapper" id="frameWrapper">
-<div class="bg" id="bg1"></div>
-<div class="bg2" id="bg2"></div>
+<img class="bg" id="bg1" alt="" decoding="async"/>
+<img class="bg2" id="bg2" alt="" decoding="async"/>
 
 <div class="frame">
   <div class="top">
@@ -1011,54 +1019,17 @@ function applyBackgroundOrientation(el, orientation){
   }
 }
 
-function getFrameDimensions(){
-  const wrapper = document.getElementById('frameWrapper');
-  if (wrapper){
-    const rect = wrapper.getBoundingClientRect();
-    if (rect.width && rect.height){
-      return { width: rect.width, height: rect.height };
-    }
-  }
-
-  const styles = getComputedStyle(document.documentElement);
-  let w = parseFloat(styles.getPropertyValue('--W')) || 1080;
-  let h = parseFloat(styles.getPropertyValue('--H')) || 1920;
-
-  if (document.body.classList.contains('rotate-90') || document.body.classList.contains('rotate-neg-90')){
-    [w, h] = [h, w];
-  }
-
-  return { width: w, height: h };
-}
-
-function computeBackgroundSize(photo){
-  if (!photo || !photo.width || !photo.height){
-    return '';
-  }
-  const { width: frameW, height: frameH } = getFrameDimensions();
-  const mode = photo.orientation === 'landscape' ? 'contain' : 'cover';
-  const scale = mode === 'contain'
-    ? Math.min(frameW / photo.width, frameH / photo.height)
-    : Math.max(frameW / photo.width, frameH / photo.height);
-  if (!Number.isFinite(scale) || scale <= 0){
-    return '';
-  }
-  const sizedW = Math.max(1, Math.round(photo.width * scale));
-  const sizedH = Math.max(1, Math.round(photo.height * scale));
-  return `${sizedW}px ${sizedH}px`;
-}
-
 function applyBackgroundImage(el, photo){
   if (!el || !photo){
     return;
   }
   applyBackgroundOrientation(el, photo.orientation);
-  el.style.backgroundImage = `url("${photo.url}")`;
-  const size = computeBackgroundSize(photo);
-  if (size){
-    el.style.backgroundSize = size;
+  if (el.tagName === 'IMG'){
+    if (el.src !== photo.url){
+      el.src = photo.url;
+    }
   }else{
-    el.style.removeProperty('background-size');
+    el.style.backgroundImage = `url("${photo.url}")`;
   }
 }
 
