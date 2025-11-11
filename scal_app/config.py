@@ -119,6 +119,8 @@ FRAME_LAYOUT_KEYS = (
     "weather",
     "layout_left",
     "section_gap",
+    "bg_pos_x",
+    "bg_pos_y",
 )
 
 FRAME_LAYOUT_DEFAULTS: Dict[str, Dict[str, int]] = {
@@ -130,6 +132,8 @@ FRAME_LAYOUT_DEFAULTS: Dict[str, Dict[str, int]] = {
         "weather": 320,
         "layout_left": 460,
         "section_gap": 26,
+        "bg_pos_x": 50,
+        "bg_pos_y": 50,
     },
     "landscape_right": {
         "width": 1080,
@@ -139,6 +143,8 @@ FRAME_LAYOUT_DEFAULTS: Dict[str, Dict[str, int]] = {
         "weather": 320,
         "layout_left": 460,
         "section_gap": 26,
+        "bg_pos_x": 50,
+        "bg_pos_y": 50,
     },
     "landscape_left": {
         "width": 1080,
@@ -148,6 +154,8 @@ FRAME_LAYOUT_DEFAULTS: Dict[str, Dict[str, int]] = {
         "weather": 320,
         "layout_left": 460,
         "section_gap": 26,
+        "bg_pos_x": 50,
+        "bg_pos_y": 50,
     },
 }
 
@@ -275,8 +283,13 @@ def update_layout_config(updates: Dict[str, Any]) -> bool:
                 value = int(float(raw))
             except Exception:
                 continue
-            if value <= 0:
-                continue
+            allow_zero = field in {"bg_pos_x", "bg_pos_y"}
+            if allow_zero:
+                if value < 0 or value > 100:
+                    continue
+            else:
+                if value <= 0:
+                    continue
             if dest.get(field) != value:
                 dest[field] = value
                 changed = True
