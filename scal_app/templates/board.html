@@ -34,22 +34,18 @@
     background-color:#000;
     transition: opacity 1s ease;
     pointer-events: none;
+    aspect-ratio: var(--W) / var(--H);
   }
   .bg.bg-landscape,
+  .bg.bg-portrait,
   .bg.bg-sideways,
   .bg2.bg-landscape,
+  .bg2.bg-portrait,
   .bg2.bg-sideways {
     width: var(--W);
-    height: auto;
-    max-width: var(--W);
-    max-height: none;
-  }
-  .bg.bg-portrait,
-  .bg2.bg-portrait {
     height: var(--H);
-    width: auto;
+    max-width: var(--W);
     max-height: var(--H);
-    max-width: none;
   }
   .bg2 { opacity: 0; }
 
@@ -271,24 +267,10 @@
   }
   body.rotate-90 .bg,
   body.rotate-90 .bg2 {
-    max-width: var(--H);
-    max-height: var(--W);
-  }
-  body.rotate-90 .bg.bg-landscape,
-  body.rotate-90 .bg.bg-sideways,
-  body.rotate-90 .bg2.bg-landscape,
-  body.rotate-90 .bg2.bg-sideways {
-    width: var(--H);
-    height: auto;
-    max-width: var(--H);
-    max-height: none;
-  }
-  body.rotate-90 .bg.bg-portrait,
-  body.rotate-90 .bg2.bg-portrait {
-    height: var(--W);
-    width: auto;
-    max-height: var(--W);
-    max-width: none;
+    width: var(--W);
+    height: var(--H);
+    max-width: var(--W);
+    max-height: var(--H);
   }
 
   /* Rotated (counter-clockwise 90deg / left) layout */
@@ -315,24 +297,10 @@
   }
   body.rotate-neg-90 .bg,
   body.rotate-neg-90 .bg2 {
-    max-width: var(--H);
-    max-height: var(--W);
-  }
-  body.rotate-neg-90 .bg.bg-landscape,
-  body.rotate-neg-90 .bg.bg-sideways,
-  body.rotate-neg-90 .bg2.bg-landscape,
-  body.rotate-neg-90 .bg2.bg-sideways {
-    width: var(--H);
-    height: auto;
-    max-width: var(--H);
-    max-height: none;
-  }
-  body.rotate-neg-90 .bg.bg-portrait,
-  body.rotate-neg-90 .bg2.bg-portrait {
-    height: var(--W);
-    width: auto;
-    max-height: var(--W);
-    max-width: none;
+    width: var(--W);
+    height: var(--H);
+    max-width: var(--W);
+    max-height: var(--H);
   }
 
 </style>
