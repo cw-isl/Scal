@@ -901,7 +901,7 @@ const PRELOAD_MIN_COUNT   = 2;
 const PRELOAD_COOLDOWN_MS = 250;
 const PHOTO_REFRESH_INTERVAL_MS = 30000;
 
-let preloadQueue = [];     // [{ url, readyAt, orientation }]
+let preloadQueue = [];     // [{ url, readyAt, orientation, width, height }]
 let isPreloading = false;
 let nextSwitchAt = 0;
 let slideTimer = null;
@@ -993,7 +993,7 @@ async function ensurePreloaded(){
       const meta = await preloadOne(url);
       if (meta){
         const orientation = determineOrientation(meta.width, meta.height);
-        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS, orientation });
+        preloadQueue.push({ url, readyAt: Date.now() + PRELOAD_COOLDOWN_MS, orientation, width: meta.width, height: meta.height });
       }
     }
   }finally{
@@ -1011,10 +1011,57 @@ function applyBackgroundOrientation(el, orientation){
   }
 }
 
-function swapBackground(nextUrl, orientation){
+function getFrameDimensions(){
+  const styles = getComputedStyle(document.documentElement);
+  const w = parseFloat(styles.getPropertyValue('--W')) || 1080;
+  const h = parseFloat(styles.getPropertyValue('--H')) || 1920;
+  return { width: w, height: h };
+}
+
+function computeBackgroundSize(photo){
+  if (!photo || !photo.width || !photo.height){
+    return '';
+  }
+  const { width: frameW, height: frameH } = getFrameDimensions();
+  const mode = photo.orientation === 'landscape' ? 'contain' : 'cover';
+  const scale = mode === 'contain'
+    ? Math.min(frameW / photo.width, frameH / photo.height)
+    : Math.max(frameW / photo.width, frameH / photo.height);
+  if (!Number.isFinite(scale) || scale <= 0){
+    return '';
+  }
+  const sizedW = Math.max(1, Math.round(photo.width * scale));
+  const sizedH = Math.max(1, Math.round(photo.height * scale));
+  return `${sizedW}px ${sizedH}px`;
+}
+
+function applyBackgroundImage(el, photo){
+  if (!el || !photo){
+    return;
+  }
+  applyBackgroundOrientation(el, photo.orientation);
+  el.style.backgroundImage = `url("${photo.url}")`;
+  const size = computeBackgroundSize(photo);
+  if (size){
+    el.style.backgroundSize = size;
+  }else{
+    el.style.removeProperty('background-size');
+  }
+}
+
+function primeHiddenLayer(){
+  const next = preloadQueue[0];
+  if (!next){
+    return;
+  }
+  const hidden = document.getElementById(front === 1 ? 'bg2' : 'bg1');
+  applyBackgroundImage(hidden, next);
+  hidden.style.opacity = 0;
+}
+
+function swapBackground(photo){
   const incoming = document.getElementById(front === 1 ? 'bg2' : 'bg1'); // 들어올 레이어(현재 투명)
-  applyBackgroundOrientation(incoming, orientation);
-  incoming.style.backgroundImage = `url("${nextUrl}")`;
+  applyBackgroundImage(incoming, photo);
   // reflow
   incoming.offsetHeight;
   incoming.style.opacity = 1;
@@ -1023,6 +1070,7 @@ function swapBackground(nextUrl, orientation){
   outgoing.style.opacity = 0;
 
   front = 3 - front;
+  primeHiddenLayer();
 }
 
 // --- 한 스텝 전환 ----------------------------------------------------------
@@ -1035,11 +1083,12 @@ async function showNextPhoto(){
   const now = Date.now();
   if (now < nextSwitchAt) return;
 
-  const { url, readyAt, orientation } = preloadQueue[0];
+  const nextPhoto = preloadQueue[0];
+  const { readyAt } = nextPhoto;
   if (now < readyAt) return;
 
   preloadQueue.shift();
-  swapBackground(url, orientation);
+  swapBackground(nextPhoto);
   nextSwitchAt = now + DISPLAY_INTERVAL_MS;
 
   // 백그라운드 프리로드
@@ -1100,8 +1149,7 @@ document.addEventListener('visibilitychange', ()=>{
   // 초기 1장 화면 세팅(큐에서 소비)
   if (preloadQueue[0]){
     const first = preloadQueue.shift();
-    applyBackgroundOrientation(b1, first.orientation);
-    b1.style.backgroundImage = `url("${first.url}")`;
+    applyBackgroundImage(b1, first);
     b1.style.opacity = 1;
     b2.style.opacity = 0;
     front = 1;
@@ -1110,11 +1158,11 @@ document.addEventListener('visibilitychange', ()=>{
 
   // 다음 전환용으로 숨김 레이어 미리 세팅(있다면)
   if (preloadQueue[0]){
-    applyBackgroundOrientation(b2, preloadQueue[0].orientation);
-    b2.style.backgroundImage = `url("${preloadQueue[0].url}")`;
+    applyBackgroundImage(b2, preloadQueue[0]);
   }
 
   startPhotoTimers();
+  primeHiddenLayer();
   showNextPhoto(); // 준비됐으면 바로 1회 시도
 })();
 </script>
