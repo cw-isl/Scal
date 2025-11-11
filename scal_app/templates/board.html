@@ -1012,9 +1012,22 @@ function applyBackgroundOrientation(el, orientation){
 }
 
 function getFrameDimensions(){
+  const wrapper = document.getElementById('frameWrapper');
+  if (wrapper){
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width && rect.height){
+      return { width: rect.width, height: rect.height };
+    }
+  }
+
   const styles = getComputedStyle(document.documentElement);
-  const w = parseFloat(styles.getPropertyValue('--W')) || 1080;
-  const h = parseFloat(styles.getPropertyValue('--H')) || 1920;
+  let w = parseFloat(styles.getPropertyValue('--W')) || 1080;
+  let h = parseFloat(styles.getPropertyValue('--H')) || 1920;
+
+  if (document.body.classList.contains('rotate-90') || document.body.classList.contains('rotate-neg-90')){
+    [w, h] = [h, w];
+  }
+
   return { width: w, height: h };
 }
 
