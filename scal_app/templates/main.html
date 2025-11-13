@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Smart Frame Landing</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0;
+    background:linear-gradient(180deg,#f2f5fb 0%, #eef1f7 45%, #ffffff 100%);
+    color:#14213d;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .navbar {
+    background:#243b6b;
+    color:#fff;
+    padding:14px 28px;
+    display:flex;
+    align-items:center;
+    gap:28px;
+    position:sticky;
+    top:0;
+    z-index:10;
+    box-shadow:0 8px 18px rgba(20,33,61,0.18);
+  }
+  .navbar-brand {
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:0.02em;
+  }
+  .nav-menu {
+    display:flex;
+    align-items:center;
+    gap:18px;
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  .menu-item {
+    position:relative;
+  }
+  .menu-trigger {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    border:none;
+    background:transparent;
+    color:inherit;
+    font:600 15px/1 'Noto Sans KR', sans-serif;
+    cursor:pointer;
+    padding:8px 12px;
+    border-radius:10px;
+    transition:background 0.18s ease;
+  }
+  .menu-trigger:hover,
+  .menu-trigger:focus-visible {
+    background:rgba(255,255,255,0.18);
+    outline:none;
+  }
+  .menu-trigger svg {
+    width:14px;
+    height:14px;
+    fill:currentColor;
+  }
+  .dropdown {
+    position:absolute;
+    top:calc(100% + 6px);
+    left:0;
+    background:#ffffff;
+    color:#1f2a44;
+    min-width:180px;
+    border-radius:12px;
+    padding:10px 0;
+    box-shadow:0 18px 36px rgba(19,34,72,0.18);
+    opacity:0;
+    pointer-events:none;
+    transform:translateY(-6px);
+    transition:opacity 0.18s ease, transform 0.18s ease;
+  }
+  .menu-item:focus-within .dropdown,
+  .menu-item:hover .dropdown {
+    opacity:1;
+    pointer-events:auto;
+    transform:translateY(0);
+  }
+  .dropdown a {
+    display:flex;
+    align-items:center;
+    padding:10px 18px;
+    font-size:14px;
+    color:inherit;
+    text-decoration:none;
+    gap:10px;
+    transition:background 0.15s ease, color 0.15s ease;
+  }
+  .dropdown a:hover,
+  .dropdown a:focus-visible {
+    background:#eef2ff;
+    color:#1a2f6b;
+    outline:none;
+  }
+  .hero {
+    flex:1 1 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:80px 24px;
+  }
+  .hero-card {
+    background:rgba(255,255,255,0.88);
+    border-radius:28px;
+    padding:48px 60px;
+    max-width:680px;
+    text-align:center;
+    box-shadow:0 24px 48px rgba(20,33,61,0.16);
+    backdrop-filter:blur(6px);
+  }
+  .hero-card h1 {
+    margin:0;
+    font-size:34px;
+    font-weight:700;
+    color:#1c2f57;
+  }
+  .hero-card p {
+    margin:18px 0 0;
+    font-size:16px;
+    line-height:1.6;
+    color:#44516d;
+  }
+  footer {
+    text-align:center;
+    padding:20px;
+    font-size:13px;
+    color:#59668b;
+  }
+  @media (max-width:640px) {
+    .navbar {
+      flex-wrap:wrap;
+      gap:14px;
+      padding:14px 18px;
+    }
+    .hero-card {
+      padding:36px 28px;
+    }
+    .hero-card h1 {
+      font-size:28px;
+    }
+  }
+</style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand">Scal Dashboard</div>
+    <ul class="nav-menu">
+      <li class="menu-item">
+        <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+          스마트 프레임
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 5.6a.8.8 0 0 1 1.12-.16L8 8.13l3.68-2.69a.8.8 0 1 1 .96 1.28l-4.16 3.04a.8.8 0 0 1-.96 0L3.36 6.72a.8.8 0 0 1-.16-1.12Z"/></svg>
+        </button>
+        <div class="dropdown" role="menu">
+          <a href="/board" role="menuitem">View</a>
+          <a href="/settings#keys-settings" role="menuitem">Keys settings</a>
+          <a href="/settings#ui-settings" role="menuitem">UI settings</a>
+          <a href="/settings#contents-settings" role="menuitem">Contents settings</a>
+        </div>
+      </li>
+      <li class="menu-item">
+        <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+          홈 어시스턴트
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 5.6a.8.8 0 0 1 1.12-.16L8 8.13l3.68-2.69a.8.8 0 1 1 .96 1.28l-4.16 3.04a.8.8 0 0 1-.96 0L3.36 6.72a.8.8 0 0 1-.16-1.12Z"/></svg>
+        </button>
+        <div class="dropdown" role="menu">
+          <a href="/board" role="menuitem">board</a>
+          <a href="/board?orientation=landscape_right" role="menuitem">right</a>
+          <a href="/board?orientation=landscape_left" role="menuitem">left</a>
+          <a href="http://ttms03.duckdns.org:8123/config/integrations/dashboard" target="_blank" rel="noopener" role="menuitem">add device</a>
+        </div>
+      </li>
+    </ul>
+  </nav>
+  <main class="hero">
+    <div class="hero-card">
+      <h1>Smart Frame &amp; Home Assistant 허브</h1>
+      <p>상단 메뉴에서 Smart Frame 보드와 설정, 그리고 홈 어시스턴트 연동 페이지로 이동하세요. 본 화면은 향후 위젯이나 공지 영역으로 확장할 수 있습니다.</p>
+    </div>
+  </main>
+  <footer>© Smart Frame</footer>
+</body>
+</html>

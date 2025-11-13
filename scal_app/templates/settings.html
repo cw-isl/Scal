@@ -25,6 +25,32 @@
     flex-direction:column;
     gap:26px;
   }
+  .groups {
+    display:flex;
+    flex-direction:column;
+    gap:32px;
+  }
+  .group {
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .group-title {
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .group-title h2 {
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    color:#1c2a59;
+  }
+  .group-title p {
+    margin:0;
+    font-size:14px;
+    color:#4a4f68;
+  }
   header {
     display:flex;
     flex-direction:column;
@@ -384,372 +410,397 @@
     <h1>Smart Frame 설정</h1>
     <p>텔레그램에서만 가능했던 설정을 이 페이지에서 한눈에 관리하세요.</p>
   </header>
-  <div class="cards">
-    <section class="card" id="calendar-card">
-      <h2>캘린더</h2>
-      <form data-section="frame">
-        <div class="field">
-          <label>iCal 주소</label>
-          <div class="calendar-rows">
-            <div class="calendar-row" data-index="1">
-              <span class="row-label">캘린더 1</span>
-              <div class="input-row">
-                <input type="url" data-role="calendar-url" placeholder="https://example.com/calendar.ics"/>
-                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-              </div>
-            </div>
-            <div class="calendar-row" data-index="2">
-              <span class="row-label">캘린더 2</span>
-              <div class="input-row">
-                <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
-                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-              </div>
-            </div>
-            <div class="calendar-row" data-index="3">
-              <span class="row-label">캘린더 3</span>
-              <div class="input-row">
-                <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
-                <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-              </div>
-            </div>
-          </div>
-          <p class="muted">최대 3개의 캘린더를 추가할 수 있습니다. 각 캘린더는 선택한 색상으로 보드에 표시됩니다.</p>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="layout-card">
-      <h2>레이아웃 (박스 크기)</h2>
-      <p class="muted">화면 방향(회전 여부)에 따라 프레임 크기와 여백을 조절해 보드를 꽉 채우세요.</p>
-      <p class="muted">배경 위치 값은 0%는 왼쪽/위쪽, 100%는 오른쪽/아래쪽을 의미합니다.</p>
-      <form data-section="frame_layout">
-        <div class="layout-groups">
-          <div class="layout-group" data-orientation="portrait">
-            <h3>세로 모드 (기본)</h3>
-            <div class="layout-grid">
-              <div class="layout-field">
-                <label for="layout-portrait-width">프레임 가로 (px)</label>
-                <input id="layout-portrait-width" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="width" placeholder="1080"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-height">프레임 세로 (px)</label>
-                <input id="layout-portrait-height" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="height" placeholder="1920"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-top">상단 헤더 높이 (px)</label>
-                <input id="layout-portrait-top" type="number" min="40" max="600" data-layout-input data-orientation="portrait" data-key="top" placeholder="90"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-calendar">캘린더 최소 높이 (px)</label>
-                <input id="layout-portrait-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="portrait" data-key="calendar" placeholder="1020"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-layout-left">왼쪽 영역 너비 (px)</label>
-                <input id="layout-portrait-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="portrait" data-key="layout_left" placeholder="460"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-section-gap">박스 간격 (px)</label>
-                <input id="layout-portrait-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="portrait" data-key="section_gap" placeholder="26"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-weather">날씨 영역 높이 (px)</label>
-                <input id="layout-portrait-weather" type="number" min="200" max="640" data-layout-input data-orientation="portrait" data-key="weather" placeholder="320"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-bg-x">배경 가로 위치 (%)</label>
-                <input id="layout-portrait-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_x" placeholder="50"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-portrait-bg-y">배경 세로 위치 (%)</label>
-                <input id="layout-portrait-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_y" placeholder="50"/>
-              </div>
-            </div>
-          </div>
-          <div class="layout-group" data-orientation="landscape_right">
-            <h3>오른쪽 회전 (시계 방향)</h3>
-            <div class="layout-grid">
-              <div class="layout-field">
-                <label for="layout-right-width">프레임 가로 (px)</label>
-                <input id="layout-right-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="width" placeholder="1080"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-height">프레임 세로 (px)</label>
-                <input id="layout-right-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="height" placeholder="1920"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-top">상단 헤더 높이 (px)</label>
-                <input id="layout-right-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_right" data-key="top" placeholder="90"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-calendar">캘린더 최소 높이 (px)</label>
-                <input id="layout-right-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_right" data-key="calendar" placeholder="1020"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-layout-left">왼쪽 영역 너비 (px)</label>
-                <input id="layout-right-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_right" data-key="layout_left" placeholder="460"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-section-gap">박스 간격 (px)</label>
-                <input id="layout-right-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_right" data-key="section_gap" placeholder="26"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-weather">날씨 영역 높이 (px)</label>
-                <input id="layout-right-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_right" data-key="weather" placeholder="320"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-bg-x">배경 가로 위치 (%)</label>
-                <input id="layout-right-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_x" placeholder="50"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-right-bg-y">배경 세로 위치 (%)</label>
-                <input id="layout-right-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_y" placeholder="50"/>
-              </div>
-            </div>
-          </div>
-          <div class="layout-group" data-orientation="landscape_left">
-            <h3>왼쪽 회전 (반시계 방향)</h3>
-            <div class="layout-grid">
-              <div class="layout-field">
-                <label for="layout-left-width">프레임 가로 (px)</label>
-                <input id="layout-left-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="width" placeholder="1080"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-height">프레임 세로 (px)</label>
-                <input id="layout-left-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="height" placeholder="1920"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-top">상단 헤더 높이 (px)</label>
-                <input id="layout-left-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_left" data-key="top" placeholder="90"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-calendar">캘린더 최소 높이 (px)</label>
-                <input id="layout-left-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_left" data-key="calendar" placeholder="1020"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-layout-left">왼쪽 영역 너비 (px)</label>
-                <input id="layout-left-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_left" data-key="layout_left" placeholder="460"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-section-gap">박스 간격 (px)</label>
-                <input id="layout-left-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_left" data-key="section_gap" placeholder="26"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-weather">날씨 영역 높이 (px)</label>
-                <input id="layout-left-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_left" data-key="weather" placeholder="320"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-bg-x">배경 가로 위치 (%)</label>
-                <input id="layout-left-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_x" placeholder="50"/>
-              </div>
-              <div class="layout-field">
-                <label for="layout-left-bg-y">배경 세로 위치 (%)</label>
-                <input id="layout-left-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_y" placeholder="50"/>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="layout-actions">
-          <button type="submit">저장</button>
-          <button type="button" class="btn-secondary" data-action="layout-reset">기본값 불러오기</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="todoist-card">
-      <h2>Todoist</h2>
-      <form data-section="todoist">
-        <div class="field">
-          <label for="todoist-token">API 토큰</label>
-          <div class="input-row">
-            <input id="todoist-token" name="api_token" type="password" placeholder="Todoist API Token"/>
-            <button type="button" class="secret-toggle" data-toggle="todoist-token">보기</button>
-          </div>
-          <p class="muted">Todoist 웹에서 <strong>Settings &gt; Integrations</strong> 메뉴에서 API 토큰을 확인할 수 있습니다.</p>
-        </div>
-        <div class="field">
-          <label for="todoist-project">프로젝트 ID (선택)</label>
-          <div class="input-row">
-            <input id="todoist-project" name="project_id" type="text" placeholder="특정 프로젝트만 불러오려면 입력"/>
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="home-card">
-      <h2>Home Assistant</h2>
-      <form data-section="home_assistant">
-        <div class="field">
-          <label for="ha-url">기본 URL</label>
-          <div class="input-row">
-            <input id="ha-url" name="base_url" type="text" placeholder="https://homeassistant.local:8123"/>
-          </div>
-          <p class="muted">Home Assistant 인스턴스의 접속 가능한 기본 URL을 입력하세요.</p>
-        </div>
-        <div class="field">
-          <label for="ha-token">장기 액세스 토큰</label>
-          <div class="input-row">
-            <input id="ha-token" name="token" type="password" placeholder="Long-Lived Access Token"/>
-            <button type="button" class="secret-toggle" data-toggle="ha-token">보기</button>
-          </div>
-          <p class="muted">Home Assistant 프로필 화면에서 생성한 Long-Lived Access Token을 입력하세요.</p>
-        </div>
-        <div class="field">
-          <label for="ha-domains">허용 도메인 (선택)</label>
-          <div class="input-row">
-            <textarea id="ha-domains" name="include_domains" rows="3" placeholder="예: light, switch"></textarea>
-          </div>
-          <p class="muted">비우면 기본으로 light, switch 도메인만 표시합니다.</p>
-        </div>
-        <div class="field">
-          <label for="ha-entities">허용 엔티티 ID (선택)</label>
-          <div class="input-row">
-            <textarea id="ha-entities" name="include_entities" rows="3" placeholder="예: light.living_room, switch.air_purifier"></textarea>
-          </div>
-          <p class="muted">특정 엔티티만 표시하려면 엔티티 ID를 입력하세요. 비우면 도메인 기준으로 표시합니다.</p>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="bus-card">
-      <h2>버스 도착 정보</h2>
-      <form data-section="bus">
-        <div class="grid-two">
-          <div class="field">
-            <label for="bus-key">TAGO 서비스 키</label>
-            <div class="input-row">
-              <input id="bus-key" name="key" type="password" placeholder="서비스키"/>
-              <button type="button" class="secret-toggle" data-toggle="bus-key">보기</button>
-            </div>
-          </div>
-          <div class="field">
-            <label for="bus-city">도시 코드</label>
-            <div class="input-row">
-              <input id="bus-city" name="city_code" type="text" placeholder="예: 25"/>
-            </div>
-          </div>
-          <div class="field">
-            <label for="bus-node">정류소 node ID</label>
-            <div class="input-row">
-              <input id="bus-node" name="node_id" type="text" placeholder="정류소 nodeId"/>
-            </div>
-          </div>
-        </div>
-        <div class="field">
-          <label>정류소 검색</label>
-          <div class="input-row">
-            <input id="bus-search-keyword" type="text" placeholder="정류소명을 입력하세요"/>
-            <button type="button" class="btn" data-action="bus-search">검색</button>
-          </div>
-          <p class="muted">서비스키와 도시 코드를 입력한 뒤 정류소명을 검색하면 node ID를 선택할 수 있습니다.</p>
-        </div>
-        <div class="bus-results" id="bus-results" hidden></div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="weather-card">
-      <h2>날씨</h2>
-      <form data-section="weather">
-        <div class="field">
-          <label for="weather-key">OpenWeather API 키</label>
-          <div class="input-row">
-            <input id="weather-key" name="api_key" type="password" placeholder="API Key"/>
-            <button type="button" class="secret-toggle" data-toggle="weather-key">보기</button>
-          </div>
-        </div>
-        <div class="field">
-          <label for="weather-location">위치</label>
-          <div class="input-row">
-            <input id="weather-location" name="location" type="text" placeholder="Seoul, South Korea"/>
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="telegram-card">
-      <h2>텔레그램</h2>
-      <form data-section="telegram">
-        <div class="field">
-          <label for="tg-token">봇 토큰</label>
-          <div class="input-row">
-            <input id="tg-token" name="bot_token" type="password" placeholder="123456:ABC..."/>
-            <button type="button" class="secret-toggle" data-toggle="tg-token">보기</button>
-          </div>
-        </div>
-        <div class="field">
-          <label for="tg-ids">허용 사용자 ID</label>
-          <div class="input-row">
-            <input id="tg-ids" name="allowed_user_ids" type="text" placeholder="예: 12345678, 987654321"/>
-          </div>
-          <p class="muted">쉼표 또는 줄바꿈으로 여러 Telegram user ID를 입력하세요. 비워두면 모두 허용됩니다.</p>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="verse-card">
-      <h2>오늘의 한마디</h2>
-      <form data-section="verse">
-        <div class="field">
-          <label for="verse-text">문구</label>
-          <div class="input-row">
-            <textarea id="verse-text" name="text" placeholder="따뜻한 문장을 입력하세요"></textarea>
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">저장</button>
-          <span class="status" hidden></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="card" id="photos-card">
-      <h2>사진 관리</h2>
-      <div class="field">
-        <label for="photo-upload">사진 업로드</label>
-        <div class="upload-area" id="photo-dropzone">
-          <input id="photo-upload" type="file" accept="image/*" multiple/>
-          <div class="input-row">
-            <button type="button" class="btn-secondary" data-action="choose-photo">사진 선택</button>
-            <button type="button" class="btn" data-action="upload-photo">업로드</button>
-          </div>
-          <p class="muted upload-hint">사진을 선택하거나 이 영역으로 드래그해서 추가하세요.</p>
-          <div class="upload-summary" id="photo-upload-summary" hidden></div>
-        </div>
-        <p class="muted">JPG, PNG, WEBP, GIF 파일을 업로드하면 보드 배경으로 자동 교체됩니다.</p>
+  <div class="groups">
+    <section class="group" id="keys-settings">
+      <div class="group-title">
+        <h2>Keys 설정</h2>
+        <p>Smart Frame과 연동되는 외부 서비스의 토큰과 기본 주소를 관리하세요.</p>
       </div>
-      <div class="photos-grid" id="photos-grid"></div>
-      <div class="actions">
-        <button type="button" class="btn-secondary" data-action="refresh-photos">목록 새로고침</button>
-        <span class="status" hidden></span>
+      <div class="cards">
+        <section class="card" id="todoist-card">
+          <h2>Todoist</h2>
+          <form data-section="todoist">
+            <div class="field">
+              <label for="todoist-token">API 토큰</label>
+              <div class="input-row">
+                <input id="todoist-token" name="api_token" type="password" placeholder="Todoist API Token"/>
+                <button type="button" class="secret-toggle" data-toggle="todoist-token">보기</button>
+              </div>
+              <p class="muted">Todoist 웹에서 <strong>Settings &gt; Integrations</strong> 메뉴에서 API 토큰을 확인할 수 있습니다.</p>
+            </div>
+            <div class="field">
+              <label for="todoist-project">프로젝트 ID (선택)</label>
+              <div class="input-row">
+                <input id="todoist-project" name="project_id" type="text" placeholder="특정 프로젝트만 불러오려면 입력"/>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="home-assistant-card">
+          <h2>Home Assistant</h2>
+          <form data-section="home_assistant">
+            <div class="field">
+              <label for="ha-url">기본 URL</label>
+              <div class="input-row">
+                <input id="ha-url" name="base_url" type="url" placeholder="https://homeassistant.local:8123"/>
+              </div>
+              <p class="muted">Home Assistant 인스턴스의 접속 가능한 기본 URL을 입력하세요.</p>
+            </div>
+            <div class="field">
+              <label for="ha-token">장기 액세스 토큰</label>
+              <div class="input-row">
+                <input id="ha-token" name="token" type="password" placeholder="Long-Lived Access Token"/>
+                <button type="button" class="secret-toggle" data-toggle="ha-token">보기</button>
+              </div>
+              <p class="muted">Home Assistant 프로필 화면에서 생성한 Long-Lived Access Token을 입력하세요.</p>
+            </div>
+            <div class="field">
+              <label for="ha-domains">허용 도메인 (선택)</label>
+              <div class="input-row">
+                <textarea id="ha-domains" name="include_domains" rows="3" placeholder="예: light, switch"></textarea>
+              </div>
+              <p class="muted">비우면 기본으로 light, switch 도메인만 표시합니다.</p>
+            </div>
+            <div class="field">
+              <label for="ha-entities">허용 엔티티 ID (선택)</label>
+              <div class="input-row">
+                <textarea id="ha-entities" name="include_entities" rows="3" placeholder="예: light.living_room, switch.air_purifier"></textarea>
+              </div>
+              <p class="muted">특정 엔티티만 표시하려면 엔티티 ID를 입력하세요. 비우면 도메인 기준으로 표시합니다.</p>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="bus-card">
+          <h2>버스 도착 정보</h2>
+          <form data-section="bus">
+            <div class="grid-two">
+              <div class="field">
+                <label for="bus-key">TAGO 서비스 키</label>
+                <div class="input-row">
+                  <input id="bus-key" name="key" type="password" placeholder="서비스키"/>
+                  <button type="button" class="secret-toggle" data-toggle="bus-key">보기</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="bus-city">도시 코드</label>
+                <div class="input-row">
+                  <input id="bus-city" name="city_code" type="text" placeholder="예: 25"/>
+                </div>
+              </div>
+              <div class="field">
+                <label for="bus-node">정류소 node ID</label>
+                <div class="input-row">
+                  <input id="bus-node" name="node_id" type="text" placeholder="정류소 nodeId"/>
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label>정류소 검색</label>
+              <div class="input-row">
+                <input id="bus-search-keyword" type="text" placeholder="정류소명을 입력하세요"/>
+                <button type="button" class="btn" data-action="bus-search">검색</button>
+              </div>
+              <p class="muted">서비스키와 도시 코드를 입력한 뒤 정류소명을 검색하면 node ID를 선택할 수 있습니다.</p>
+            </div>
+            <div class="bus-results" id="bus-results" hidden></div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="weather-card">
+          <h2>날씨</h2>
+          <form data-section="weather">
+            <div class="field">
+              <label for="weather-key">OpenWeather API 키</label>
+              <div class="input-row">
+                <input id="weather-key" name="api_key" type="password" placeholder="API Key"/>
+                <button type="button" class="secret-toggle" data-toggle="weather-key">보기</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="weather-location">위치</label>
+              <div class="input-row">
+                <input id="weather-location" name="location" type="text" placeholder="Seoul, South Korea"/>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="telegram-card">
+          <h2>텔레그램</h2>
+          <form data-section="telegram">
+            <div class="field">
+              <label for="tg-token">봇 토큰</label>
+              <div class="input-row">
+                <input id="tg-token" name="bot_token" type="password" placeholder="123456:ABC..."/>
+                <button type="button" class="secret-toggle" data-toggle="tg-token">보기</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="tg-ids">허용 사용자 ID</label>
+              <div class="input-row">
+                <input id="tg-ids" name="allowed_user_ids" type="text" placeholder="예: 12345678, 987654321"/>
+              </div>
+              <p class="muted">쉼표 또는 줄바꿈으로 여러 Telegram user ID를 입력하세요. 비워두면 모두 허용됩니다.</p>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
       </div>
     </section>
+
+    <section class="group" id="ui-settings">
+      <div class="group-title">
+        <h2>UI 설정</h2>
+        <p>프레임 화면 크기와 배치를 조정해 보드 레이아웃을 다듬어 보세요.</p>
+      </div>
+      <div class="cards">
+        <section class="card" id="layout-card">
+          <h2>레이아웃 (박스 크기)</h2>
+          <p class="muted">화면 방향(회전 여부)에 따라 프레임 크기와 여백을 조절해 보드를 꽉 채우세요.</p>
+          <p class="muted">배경 위치 값은 0%는 왼쪽/위쪽, 100%는 오른쪽/아래쪽을 의미합니다.</p>
+          <form data-section="frame_layout">
+            <div class="layout-groups">
+              <div class="layout-group" data-orientation="portrait">
+                <h3>세로 모드 (기본)</h3>
+                <div class="layout-grid">
+                  <div class="layout-field">
+                    <label for="layout-portrait-width">프레임 가로 (px)</label>
+                    <input id="layout-portrait-width" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="width" placeholder="1080"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-height">프레임 세로 (px)</label>
+                    <input id="layout-portrait-height" type="number" min="600" max="4000" data-layout-input data-orientation="portrait" data-key="height" placeholder="1920"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-top">상단 헤더 높이 (px)</label>
+                    <input id="layout-portrait-top" type="number" min="40" max="600" data-layout-input data-orientation="portrait" data-key="top" placeholder="90"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-calendar">캘린더 최소 높이 (px)</label>
+                    <input id="layout-portrait-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="portrait" data-key="calendar" placeholder="1020"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-layout-left">왼쪽 영역 너비 (px)</label>
+                    <input id="layout-portrait-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="portrait" data-key="layout_left" placeholder="460"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-section-gap">박스 간격 (px)</label>
+                    <input id="layout-portrait-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="portrait" data-key="section_gap" placeholder="26"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-weather">날씨 영역 높이 (px)</label>
+                    <input id="layout-portrait-weather" type="number" min="200" max="640" data-layout-input data-orientation="portrait" data-key="weather" placeholder="320"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-bg-x">배경 가로 위치 (%)</label>
+                    <input id="layout-portrait-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_x" placeholder="50"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-portrait-bg-y">배경 세로 위치 (%)</label>
+                    <input id="layout-portrait-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_y" placeholder="50"/>
+                  </div>
+                </div>
+              </div>
+              <div class="layout-group" data-orientation="landscape_right">
+                <h3>오른쪽 회전 (시계 방향)</h3>
+                <div class="layout-grid">
+                  <div class="layout-field">
+                    <label for="layout-right-width">프레임 가로 (px)</label>
+                    <input id="layout-right-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="width" placeholder="1080"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-height">프레임 세로 (px)</label>
+                    <input id="layout-right-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_right" data-key="height" placeholder="1920"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-top">상단 헤더 높이 (px)</label>
+                    <input id="layout-right-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_right" data-key="top" placeholder="90"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-calendar">캘린더 최소 높이 (px)</label>
+                    <input id="layout-right-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_right" data-key="calendar" placeholder="1020"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-layout-left">왼쪽 영역 너비 (px)</label>
+                    <input id="layout-right-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_right" data-key="layout_left" placeholder="460"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-section-gap">박스 간격 (px)</label>
+                    <input id="layout-right-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_right" data-key="section_gap" placeholder="26"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-weather">날씨 영역 높이 (px)</label>
+                    <input id="layout-right-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_right" data-key="weather" placeholder="320"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-bg-x">배경 가로 위치 (%)</label>
+                    <input id="layout-right-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_x" placeholder="50"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-right-bg-y">배경 세로 위치 (%)</label>
+                    <input id="layout-right-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_y" placeholder="50"/>
+                  </div>
+                </div>
+              </div>
+              <div class="layout-group" data-orientation="landscape_left">
+                <h3>왼쪽 회전 (반시계 방향)</h3>
+                <div class="layout-grid">
+                  <div class="layout-field">
+                    <label for="layout-left-width">프레임 가로 (px)</label>
+                    <input id="layout-left-width" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="width" placeholder="1080"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-height">프레임 세로 (px)</label>
+                    <input id="layout-left-height" type="number" min="600" max="4000" data-layout-input data-orientation="landscape_left" data-key="height" placeholder="1920"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-top">상단 헤더 높이 (px)</label>
+                    <input id="layout-left-top" type="number" min="40" max="600" data-layout-input data-orientation="landscape_left" data-key="top" placeholder="90"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-calendar">캘린더 최소 높이 (px)</label>
+                    <input id="layout-left-calendar" type="number" min="400" max="1400" data-layout-input data-orientation="landscape_left" data-key="calendar" placeholder="1020"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-layout-left">왼쪽 영역 너비 (px)</label>
+                    <input id="layout-left-layout-left" type="number" min="200" max="800" data-layout-input data-orientation="landscape_left" data-key="layout_left" placeholder="460"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-section-gap">박스 간격 (px)</label>
+                    <input id="layout-left-section-gap" type="number" min="8" max="80" data-layout-input data-orientation="landscape_left" data-key="section_gap" placeholder="26"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-weather">날씨 영역 높이 (px)</label>
+                    <input id="layout-left-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_left" data-key="weather" placeholder="320"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-bg-x">배경 가로 위치 (%)</label>
+                    <input id="layout-left-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_x" placeholder="50"/>
+                  </div>
+                  <div class="layout-field">
+                    <label for="layout-left-bg-y">배경 세로 위치 (%)</label>
+                    <input id="layout-left-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_y" placeholder="50"/>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="layout-actions">
+              <button type="submit">저장</button>
+              <button type="button" class="btn-secondary" data-action="layout-reset">기본값 불러오기</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <section class="group" id="contents-settings">
+      <div class="group-title">
+        <h2>콘텐츠 설정</h2>
+        <p>오늘의 한마디와 사진, 달력 정보를 채워 Smart Frame 화면을 풍성하게 만드세요.</p>
+      </div>
+      <div class="cards">
+        <section class="card" id="calendar-card">
+          <h2>캘린더</h2>
+          <form data-section="frame">
+            <div class="field">
+              <label>iCal 주소</label>
+              <div class="calendar-rows">
+                <div class="calendar-row" data-index="1">
+                  <span class="row-label">캘린더 1</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="https://example.com/calendar.ics"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+                <div class="calendar-row" data-index="2">
+                  <span class="row-label">캘린더 2</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+                <div class="calendar-row" data-index="3">
+                  <span class="row-label">캘린더 3</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+              </div>
+              <p class="muted">최대 3개의 캘린더를 추가할 수 있습니다. 각 캘린더는 선택한 색상으로 보드에 표시됩니다.</p>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="verse-card">
+          <h2>오늘의 한마디</h2>
+          <form data-section="verse">
+            <div class="field">
+              <label for="verse-text">문구</label>
+              <div class="input-row">
+                <textarea id="verse-text" name="text" placeholder="따뜻한 문장을 입력하세요"></textarea>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="photos-card">
+          <h2>사진 관리</h2>
+          <div class="field">
+            <label for="photo-upload">사진 업로드</label>
+            <div class="upload-area" id="photo-dropzone">
+              <input id="photo-upload" type="file" accept="image/*" multiple/>
+              <div class="input-row">
+                <button type="button" class="btn-secondary" data-action="choose-photo">사진 선택</button>
+                <button type="button" class="btn" data-action="upload-photo">업로드</button>
+              </div>
+              <p class="muted upload-hint">사진을 선택하거나 이 영역으로 드래그해서 추가하세요.</p>
+              <div class="upload-summary" id="photo-upload-summary" hidden></div>
+            </div>
+            <p class="muted">JPG, PNG, WEBP, GIF 파일을 업로드하면 보드 배경으로 자동 교체됩니다.</p>
+          </div>
+          <div class="photos-grid" id="photos-grid"></div>
+          <div class="actions">
+            <button type="button" class="btn-secondary" data-action="refresh-photos">목록 새로고침</button>
+            <span class="status" hidden></span>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
   </div>
   <footer>© Smart Frame</footer>
 </div>
