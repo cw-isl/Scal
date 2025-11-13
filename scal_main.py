@@ -50,7 +50,7 @@ from scal_app.config import (
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
 from scal_app.services.todoist import fetch_tasks as fetch_todoist_tasks, TodoistAPIError
-from scal_app.templates import load_board_html, load_settings_html
+from scal_app.templates import load_board_html, load_settings_html, load_main_html
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
 _ical_cache: Dict[str, Dict[str, Any]] = {}
@@ -957,6 +957,11 @@ def api_home_devices_execute(device_id: str):
 # === [SECTION: Board HTML (legacy UI; monthly calendar + photo fade)] ========
 # Board HTML moved to scal_app.templates.board.html
 
+
+
+@app.get("/main")
+def main_page():
+    return render_template_string(load_main_html())
 
 
 @app.get("/board")
