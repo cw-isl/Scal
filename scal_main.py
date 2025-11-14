@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Smart Frame application with Telegram assistant and simplified features."""
+"""Smart Frame application powering the smart dashboard experience."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 # Search for lines like `# === [SECTION: ...] ===` to navigate.
 
 # === [SECTION: Imports / Standard & Third-party] ==============================
-import os, time, secrets, threading, re, fcntl, xml.etree.ElementTree as ET
+import os, time, secrets, re, xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,11 +20,6 @@ import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
-try:  # Telegram bot integration is optional
-    import telebot
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    telebot = None  # type: ignore[assignment]
-
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
     level=logging.INFO,
@@ -34,22 +29,20 @@ from scal_app.config import (
     CFG,
     TZ,
     TZ_NAME,
-    BASE,
     PHOTOS_DIR,
     get_verse,
     set_verse,
     save_config_to_source,
-    load_state,
-    save_state,
     FRAME_LAYOUT_DEFAULTS,
     frame_layout_snapshot,
     get_layout_for_orientation,
     normalize_orientation,
     update_layout_config,
+    load_todos,
+    save_todos,
 )
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
-from scal_app.services.todoist import fetch_tasks as fetch_todoist_tasks, TodoistAPIError
 from scal_app.templates import load_board_html, load_settings_html, load_main_html
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
@@ -545,10 +538,6 @@ def _settings_snapshot() -> Dict[str, Any]:
     ha_cfg = CFG.get("home_assistant", {}) or {}
     bus_cfg = CFG.get("bus", {}) or {}
     weather_cfg = CFG.get("weather", {}) or {}
-    tg_cfg = CFG.get("telegram", {}) or {}
-    todo_cfg = CFG.get("todoist", {}) or {}
-    allowed_ids = tg_cfg.get("allowed_user_ids") or []
-    allowed_text = ", ".join(str(x) for x in allowed_ids)
     return {
         "frame": {
             "ical_url": frame_cfg.get("ical_url", ""),
@@ -571,33 +560,8 @@ def _settings_snapshot() -> Dict[str, Any]:
             "api_key": weather_cfg.get("api_key", ""),
             "location": weather_cfg.get("location", ""),
         },
-        "telegram": {
-            "bot_token": tg_cfg.get("bot_token", ""),
-            "allowed_user_ids": allowed_ids,
-            "allowed_user_ids_text": allowed_text,
-        },
-        "todoist": {
-            "api_token": todo_cfg.get("api_token", ""),
-            "project_id": todo_cfg.get("project_id", ""),
-        },
         "verse": {"text": get_verse()},
     }
-
-
-def _parse_allowed_ids(raw: str) -> List[int]:
-    raw = (raw or "").strip()
-    if not raw:
-        return []
-    parts = re.split(r"[\s,]+", raw)
-    result: List[int] = []
-    for part in parts:
-        if not part:
-            continue
-        try:
-            result.append(int(part))
-        except ValueError as exc:
-            raise ValueError(f"숫자 ID만 입력하세요: '{part}'") from exc
-    return result
 
 
 def _is_safe_photo_path(path: Path) -> bool:
@@ -631,21 +595,148 @@ def api_set_verse():
     return jsonify({"success": True, "verse": {"text": get_verse()}})
 
 # === [SECTION: REST API endpoints used by the board HTML] ====================
+TODO_DATE_FMT = "%Y-%m-%d"
+
+
+def _generate_todo_id() -> str:
+    return secrets.token_urlsafe(8)
+
+
+def _normalize_due_date(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        datetime.strptime(text, TODO_DATE_FMT)
+    except ValueError as exc:  # pragma: no cover - defensive validation
+        raise ValueError("날짜는 YYYY-MM-DD 형식으로 입력하세요.") from exc
+    return text
+
+
+def _normalize_loaded_todo(raw: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ValueError("Invalid todo entry")
+    title = str(raw.get("title") or raw.get("text") or "").strip()
+    if not title:
+        raise ValueError("할 일 제목이 비어 있습니다.")
+    due_date = _normalize_due_date(raw.get("due_date") or raw.get("due"))
+    todo_id = str(raw.get("id") or raw.get("todo_id") or "").strip() or _generate_todo_id()
+    completed = bool(raw.get("completed"))
+    created = str(raw.get("created_at") or "").strip()
+    if not created:
+        created = datetime.now(TZ).isoformat()
+    updated = str(raw.get("updated_at") or "").strip() or created
+    return {
+        "id": todo_id,
+        "title": title,
+        "due_date": due_date,
+        "completed": completed,
+        "created_at": created,
+        "updated_at": updated,
+    }
+
+
+def _todo_sort_key(item: Dict[str, Any]) -> Tuple[int, str, str, str]:
+    completed = 1 if item.get("completed") else 0
+    due = item.get("due_date") or "9999-12-31"
+    created = item.get("created_at") or ""
+    title = str(item.get("title") or "")
+    return (completed, due, created, title.lower())
+
+
+def _load_todo_items() -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    for raw in load_todos():
+        try:
+            items.append(_normalize_loaded_todo(raw))
+        except Exception:
+            logging.getLogger(__name__).debug("Ignoring invalid todo entry", exc_info=True)
+    items.sort(key=_todo_sort_key)
+    return items
+
+
+def _persist_todo_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items.sort(key=_todo_sort_key)
+    save_todos(items)
+    return items
+
+
+def _serialize_todos(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [dict(item) for item in items]
+
+
 @app.get("/api/todo")
 def api_todo():
-    cfg = CFG.get("todoist", {}) or {}
-    token = (cfg.get("api_token") or "").strip()
-    project = (cfg.get("project_id") or "").strip() or None
-    if not token:
-        return jsonify({"items": [], "need_config": True})
+    items = _load_todo_items()
+    return jsonify({"items": _serialize_todos(items)})
+
+
+@app.post("/api/todo")
+def api_todo_create():
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "할 일 내용을 입력하세요."}), 400
     try:
-        tasks = fetch_todoist_tasks(token, project_id=project, limit=10, tz=TZ)
-    except TodoistAPIError as exc:
-        return jsonify({"items": [], "error": str(exc)})
-    except Exception as exc:
-        logging.getLogger(__name__).warning("Todoist fetch failed: %s", exc, exc_info=True)
-        return jsonify({"items": [], "error": "할 일을 불러오지 못했습니다."}), 502
-    return jsonify({"items": tasks})
+        due_date = _normalize_due_date(payload.get("due_date"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    completed = bool(payload.get("completed"))
+    now_iso = datetime.now(TZ).isoformat()
+    item = {
+        "id": _generate_todo_id(),
+        "title": title,
+        "due_date": due_date,
+        "completed": completed,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    items = _load_todo_items()
+    items.append(item)
+    persisted = _persist_todo_items(items)
+    return jsonify({"item": item, "items": _serialize_todos(persisted)}), 201
+
+
+@app.route("/api/todo/<todo_id>", methods=["PUT", "PATCH"])
+def api_todo_update(todo_id: str):
+    payload = request.get_json(silent=True) or {}
+    items = _load_todo_items()
+    for item in items:
+        if item["id"] == todo_id:
+            break
+    else:
+        return jsonify({"error": "할 일을 찾을 수 없습니다."}), 404
+
+    if "title" in payload:
+        title = str(payload.get("title") or "").strip()
+        if not title:
+            return jsonify({"error": "할 일 내용을 입력하세요."}), 400
+        item["title"] = title
+
+    if "due_date" in payload:
+        try:
+            item["due_date"] = _normalize_due_date(payload.get("due_date"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+    if "completed" in payload:
+        item["completed"] = bool(payload.get("completed"))
+
+    item["updated_at"] = datetime.now(TZ).isoformat()
+    persisted = _persist_todo_items(items)
+    return jsonify({"item": item, "items": _serialize_todos(persisted)})
+
+
+@app.delete("/api/todo/<todo_id>")
+def api_todo_delete(todo_id: str):
+    items = _load_todo_items()
+    new_items = [item for item in items if item.get("id") != todo_id]
+    if len(new_items) == len(items):
+        return jsonify({"error": "할 일을 찾을 수 없습니다."}), 404
+    persisted = _persist_todo_items(new_items)
+    return jsonify({"items": _serialize_todos(persisted), "success": True})
 
 
 # === [SECTION: Settings management endpoints] ================================
@@ -758,26 +849,6 @@ def api_update_settings():
             CFG.setdefault("weather", {})["location"] = (section.get("location") or "").strip()
             updated = True
 
-        if "todoist" in payload:
-            section = payload["todoist"] or {}
-            CFG.setdefault("todoist", {})["api_token"] = (section.get("api_token") or "").strip()
-            CFG.setdefault("todoist", {})["project_id"] = (section.get("project_id") or "").strip()
-            updated = True
-
-        if "telegram" in payload:
-            section = payload["telegram"] or {}
-            bot_token = (section.get("bot_token") or "").strip()
-            try:
-                allowed = _parse_allowed_ids(section.get("allowed_user_ids", ""))
-            except ValueError as exc:
-                errors.append(str(exc))
-            else:
-                cfg = CFG.setdefault("telegram", {})
-                cfg["bot_token"] = bot_token
-                cfg["allowed_user_ids"] = allowed
-                global ALLOWED
-                ALLOWED = set(allowed)
-                updated = True
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -973,488 +1044,8 @@ def board():
 def settings_page():
     return render_template_string(load_settings_html())
 
-# Bot state helpers are provided by scal_app.config.load_state/save_state
-
-# === [SECTION: Telegram bot initialization / ACL] ============================
-if telebot and CFG["telegram"].get("bot_token"):
-    TB = telebot.TeleBot(CFG["telegram"]["bot_token"])
-else:
-    if CFG["telegram"].get("bot_token") and not telebot:
-        print("[TG] pyTelegramBotAPI 미설치로 텔레그램을 비활성화합니다.")
-    TB = None
-ALLOWED = set(CFG["telegram"]["allowed_user_ids"])
-
-
-def allowed(uid: int) -> bool:
-    return uid in ALLOWED if ALLOWED else True
-
-
-# === [SECTION: Telegram command handlers (simplified menu)] ===================
-if TB:
-    def _get_state(uid: int) -> Dict[str, Any]:
-        return load_state().get(str(uid), {})
-
-
-    def _set_state(uid: int, data: Dict[str, Any]) -> None:
-        st = load_state()
-        st[str(uid)] = data
-        save_state(st)
-
-
-    def _update_state(uid: int, **updates: Any) -> Dict[str, Any]:
-        st = load_state()
-        cur = st.get(str(uid), {})
-        cur.update(updates)
-        st[str(uid)] = cur
-        save_state(st)
-        return cur
-
-
-    def _clear_state(uid: int) -> None:
-        st = load_state()
-        if str(uid) in st:
-            st.pop(str(uid), None)
-            save_state(st)
-
-
-    def _send_main_menu(chat_id: int) -> None:
-        kb = telebot.types.InlineKeyboardMarkup(row_width=1)
-        options = [
-            ("1) 캘린더 iCal 주소", "cfg_ical"),
-            ("2) Home Assistant 설정", "cfg_ha"),
-            ("3) 버스 정보", "cfg_bus"),
-            ("4) 사진 등록", "cfg_photo"),
-            ("5) 날씨 API 설정", "cfg_weather"),
-            ("6) 오늘의 한마디", "cfg_verse"),
-        ]
-        for text_label, data in options:
-            kb.add(telebot.types.InlineKeyboardButton(text_label, callback_data=data))
-        TB.send_message(chat_id, "원하는 항목을 선택하세요:", reply_markup=kb)
-
-
-    def _build_bus_stop_keyboard(stops: List[Tuple[str, str, str]]) -> telebot.types.InlineKeyboardMarkup:
-        kb = telebot.types.InlineKeyboardMarkup(row_width=1)
-        for idx, (name, ars, _node) in enumerate(stops[:10]):
-            label = f"{name} ({ars})" if ars else name
-            kb.add(
-                telebot.types.InlineKeyboardButton(label[:64], callback_data=f"bus_stop:{idx}")
-            )
-        kb.add(telebot.types.InlineKeyboardButton("취소", callback_data="bus_stop_cancel"))
-        return kb
-
-
-    @TB.message_handler(commands=["start"])
-    def tg_start(m):
-        if not allowed(m.from_user.id):
-            return TB.reply_to(m, "권한이 없습니다.")
-        _clear_state(m.from_user.id)
-        lines = ["스마트 프레임 설정 봇입니다.", "메뉴에서 원하는 항목을 선택하세요."]
-        TB.send_message(m.chat.id, "\n".join(lines))
-        _send_main_menu(m.chat.id)
-
-
-    @TB.message_handler(commands=["set", "frame"])
-    def tg_set_menu(m):
-        if not allowed(m.from_user.id):
-            return TB.reply_to(m, "권한이 없습니다.")
-        _clear_state(m.from_user.id)
-        _send_main_menu(m.chat.id)
-
-
-    @TB.callback_query_handler(
-        func=lambda c: c.data in {"cfg_ical", "cfg_ha", "cfg_bus", "cfg_photo", "cfg_weather", "cfg_verse"}
-    )
-    def on_main_callbacks(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        chat_id = c.message.chat.id
-        uid = c.from_user.id
-        TB.answer_callback_query(c.id)
-
-        if c.data == "cfg_ical":
-            current = _primary_calendar_url() or "(미설정)"
-            _set_state(uid, {"mode": "await_ical"})
-            TB.send_message(
-                chat_id,
-                f"현재 iCal URL:\n{current}\n새 URL을 입력하거나 /cancel 로 취소하세요.",
-            )
-        elif c.data == "cfg_ha":
-            kb = telebot.types.InlineKeyboardMarkup(row_width=1)
-            kb.add(
-                telebot.types.InlineKeyboardButton("기본 URL", callback_data="ha_set_url"),
-                telebot.types.InlineKeyboardButton("토큰", callback_data="ha_set_token"),
-                telebot.types.InlineKeyboardButton("허용 도메인", callback_data="ha_set_domains"),
-                telebot.types.InlineKeyboardButton("허용 엔티티", callback_data="ha_set_entities"),
-                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="ha_show_config"),
-            )
-            TB.send_message(chat_id, "Home Assistant 설정을 선택하세요.", reply_markup=kb)
-        elif c.data == "cfg_bus":
-            kb = telebot.types.InlineKeyboardMarkup(row_width=1)
-            kb.add(
-                telebot.types.InlineKeyboardButton("서비스키 입력", callback_data="bus_set_key"),
-                telebot.types.InlineKeyboardButton("도시 코드 입력", callback_data="bus_set_city"),
-                telebot.types.InlineKeyboardButton("정류소 검색", callback_data="bus_set_stop"),
-                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="bus_show_config"),
-                telebot.types.InlineKeyboardButton("도착 정보 테스트", callback_data="bus_test"),
-            )
-            TB.send_message(chat_id, "버스 정보 설정을 선택하세요.", reply_markup=kb)
-        elif c.data == "cfg_photo":
-            _set_state(uid, {"mode": "await_photo"})
-            TB.send_message(
-                chat_id,
-                "등록할 사진을 전송해주세요.\n원하지 않으면 /cancel 을 입력하세요.",
-            )
-        elif c.data == "cfg_weather":
-            kb = telebot.types.InlineKeyboardMarkup(row_width=1)
-            kb.add(
-                telebot.types.InlineKeyboardButton("API 키 입력", callback_data="weather_set_key"),
-                telebot.types.InlineKeyboardButton("위치 입력", callback_data="weather_set_location"),
-                telebot.types.InlineKeyboardButton("현재 설정 보기", callback_data="weather_show_config"),
-            )
-            TB.send_message(chat_id, "날씨 설정을 선택하세요.", reply_markup=kb)
-        elif c.data == "cfg_verse":
-            _set_state(uid, {"mode": "await_verse"})
-            TB.send_message(chat_id, "오늘의 한마디를 입력해주세요. /cancel 로 취소할 수 있습니다.")
-
-
-    @TB.callback_query_handler(
-        func=lambda c: c.data
-        in {"ha_set_url", "ha_set_token", "ha_set_domains", "ha_set_entities", "ha_show_config"}
-    )
-    def on_home_assistant_callbacks(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        chat_id = c.message.chat.id
-        uid = c.from_user.id
-        TB.answer_callback_query(c.id)
-
-        if c.data == "ha_set_url":
-            _set_state(uid, {"mode": "await_ha_url"})
-            TB.send_message(
-                chat_id,
-                "Home Assistant 기본 URL을 입력하세요. 예: https://homeassistant.local:8123",
-            )
-        elif c.data == "ha_set_token":
-            _set_state(uid, {"mode": "await_ha_token"})
-            TB.send_message(chat_id, "Home Assistant 장기 액세스 토큰을 입력하세요. /cancel 로 취소")
-        elif c.data == "ha_set_domains":
-            _set_state(uid, {"mode": "await_ha_domains"})
-            TB.send_message(
-                chat_id,
-                "표시할 도메인을 콤마로 구분해 입력하세요. 비우면 기본값(light,switch). /cancel",
-            )
-        elif c.data == "ha_set_entities":
-            _set_state(uid, {"mode": "await_ha_entities"})
-            TB.send_message(
-                chat_id,
-                "표시할 엔티티 ID를 콤마로 구분해 입력하세요. 비우면 도메인 기준. /cancel",
-            )
-        elif c.data == "ha_show_config":
-            cfg = CFG.get("home_assistant", {}) or {}
-            base_url = cfg.get("base_url") or "설정안됨"
-            token = _mask_secret(cfg.get("token", ""))
-            domains = cfg.get("include_domains") or []
-            entities = cfg.get("include_entities") or []
-            dom_txt = ", ".join(domains) if domains else "기본값"
-            ent_txt = ", ".join(entities) if entities else "도메인 기준"
-            lines = [
-                f"기본 URL: {base_url}",
-                f"토큰: {token}",
-                f"허용 도메인: {dom_txt}",
-                f"허용 엔티티: {ent_txt}",
-            ]
-            TB.send_message(chat_id, "\n".join(lines))
-
-
-    @TB.callback_query_handler(
-        func=lambda c: c.data in {"bus_set_key", "bus_set_city", "bus_set_stop", "bus_show_config", "bus_test"}
-    )
-    def on_bus_callbacks(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        chat_id = c.message.chat.id
-        uid = c.from_user.id
-        TB.answer_callback_query(c.id)
-        bus_cfg = CFG.setdefault("bus", {})
-
-        if c.data == "bus_set_key":
-            _set_state(uid, {"mode": "await_bus_key"})
-            TB.send_message(chat_id, "TAGO 서비스키를 입력하세요. /cancel 로 취소")
-        elif c.data == "bus_set_city":
-            _set_state(uid, {"mode": "await_bus_city"})
-            TB.send_message(chat_id, "도시 코드를 입력하세요 (예: 25). /cancel 로 취소")
-        elif c.data == "bus_set_stop":
-            if not (bus_cfg.get("key") and bus_cfg.get("city_code")):
-                TB.send_message(chat_id, "먼저 서비스키와 도시 코드를 입력해주세요.")
-                return
-            _set_state(uid, {"mode": "await_bus_stop_keyword"})
-            TB.send_message(chat_id, "정류소명을 입력하세요. /cancel 로 취소")
-        elif c.data == "bus_show_config":
-            key_state = "등록" if bus_cfg.get("key") else "미등록"
-            lines = [
-                f"도시 코드: {bus_cfg.get('city_code') or '설정안됨'}",
-                f"정류소 nodeId: {bus_cfg.get('node_id') or '설정안됨'}",
-                f"서비스 키: {key_state}",
-            ]
-            TB.send_message(chat_id, "\n".join(lines))
-        elif c.data == "bus_test":
-            try:
-                box = render_bus_box()
-            except Exception as exc:
-                TB.send_message(chat_id, f"버스 정보 조회 실패: {exc}")
-                return
-            rows = box.get("rows", [])
-            if not rows:
-                TB.send_message(chat_id, "도착 정보를 가져오지 못했습니다.")
-                return
-            lines = [box.get("title", "버스도착")]
-            for row in rows[:10]:
-                text = row.get("text")
-                if text:
-                    lines.append(text)
-                else:
-                    lines.append(f"{row.get('route')} · {row.get('eta')} · {row.get('hops')}")
-            TB.send_message(chat_id, "\n".join(lines))
-
-
-    @TB.callback_query_handler(func=lambda c: c.data in {"weather_set_key", "weather_set_location", "weather_show_config"})
-    def on_weather_callbacks(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        chat_id = c.message.chat.id
-        uid = c.from_user.id
-        TB.answer_callback_query(c.id)
-        weather_cfg = CFG.setdefault("weather", {})
-
-        if c.data == "weather_set_key":
-            _set_state(uid, {"mode": "await_weather_key"})
-            TB.send_message(chat_id, "OpenWeather API 키를 입력하세요. /cancel 로 취소")
-        elif c.data == "weather_set_location":
-            _set_state(uid, {"mode": "await_weather_location"})
-            TB.send_message(chat_id, "날씨를 조회할 위치를 입력하세요 (예: Seoul, KR). /cancel 로 취소")
-        elif c.data == "weather_show_config":
-            provider = weather_cfg.get("provider") or "openweathermap"
-            location = weather_cfg.get("location") or "설정안됨"
-            api_key = _mask_secret(weather_cfg.get("api_key", ""))
-            lines = [
-                f"제공자: {provider}",
-                f"위치: {location}",
-                f"API 키: {api_key}",
-            ]
-            TB.send_message(chat_id, "\n".join(lines))
-
-
-    @TB.callback_query_handler(func=lambda c: c.data.startswith("bus_stop:"))
-    def on_bus_stop_select(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        uid = c.from_user.id
-        st = _get_state(uid)
-        if st.get("mode") != "await_bus_stop_select":
-            TB.answer_callback_query(c.id)
-            return
-        stops = st.get("stop_results") or []
-        try:
-            index = int(c.data.split(":", 1)[1])
-        except (ValueError, IndexError):
-            TB.answer_callback_query(c.id, "선택 오류")
-            return
-        if not (0 <= index < len(stops)):
-            TB.answer_callback_query(c.id, "선택 범위를 벗어났습니다.")
-            return
-        name, _ars, node = stops[index]
-        CFG.setdefault("bus", {})["node_id"] = node
-        save_config_to_source(CFG)
-        _clear_state(uid)
-        TB.answer_callback_query(c.id, "정류소 저장 완료")
-        TB.send_message(c.message.chat.id, f"정류소가 저장되었습니다: {name} ({node})")
-
-
-    @TB.callback_query_handler(func=lambda c: c.data == "bus_stop_cancel")
-    def on_bus_stop_cancel(c):
-        if not allowed(c.from_user.id):
-            TB.answer_callback_query(c.id, "권한이 없습니다.")
-            return
-        _clear_state(c.from_user.id)
-        TB.answer_callback_query(c.id, "취소했습니다.")
-        TB.send_message(c.message.chat.id, "정류소 선택을 취소했습니다.")
-
-
-    @TB.message_handler(commands=["cancel"])
-    def tg_cancel(m):
-        if not allowed(m.from_user.id):
-            return TB.reply_to(m, "권한이 없습니다.")
-        _clear_state(m.from_user.id)
-        TB.reply_to(m, "진행 중인 작업을 취소했습니다.")
-
-
-    @TB.message_handler(content_types=["photo"])
-    def on_photo(m):
-        if not allowed(m.from_user.id):
-            return
-        st = _get_state(m.from_user.id)
-        if st.get("mode") != "await_photo":
-            return
-        try:
-            largest = max(m.photo, key=lambda p: p.file_size or 0)
-            file_info = TB.get_file(largest.file_id)
-            data = TB.download_file(file_info.file_path)
-            suffix = Path(file_info.file_path).suffix or ".jpg"
-            ts = datetime.now(TZ).strftime("%Y%m%d_%H%M%S")
-            fname = f"tg_{ts}_{secrets.token_hex(3)}{suffix}"
-            dest = PHOTOS_DIR / fname
-            dest.write_bytes(data)
-            _clear_state(m.from_user.id)
-            TB.reply_to(m, f"사진 저장 완료: {fname}")
-        except Exception as exc:
-            TB.reply_to(m, f"사진 저장 실패: {exc}")
-
-
-    @TB.message_handler(func=lambda m: True, content_types=["text"])
-    def on_text(m):
-        if not allowed(m.from_user.id):
-            return
-        text = (m.text or "").strip()
-        if not text:
-            return
-        st = _get_state(m.from_user.id)
-        if not st:
-            return
-        mode = st.get("mode")
-        uid = m.from_user.id
-
-        if mode == "await_ical":
-            if not (text.startswith("http://") or text.startswith("https://")):
-                TB.reply_to(m, "http:// 또는 https:// 로 시작하는 URL을 입력하세요.")
-                return
-            _set_primary_calendar(text)
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "iCal URL이 저장되었습니다. 보드는 잠시 후 갱신됩니다.")
-        elif mode == "await_verse":
-            set_verse(text)
-            _clear_state(uid)
-            TB.reply_to(m, "오늘의 한마디가 저장되었습니다.")
-        elif mode == "await_ha_url":
-            CFG.setdefault("home_assistant", {})["base_url"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "기본 URL이 저장되었습니다.")
-        elif mode == "await_ha_token":
-            CFG.setdefault("home_assistant", {})["token"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "토큰이 저장되었습니다.")
-        elif mode == "await_ha_domains":
-            items = [seg.strip() for seg in re.split(r"[\s,]+", text) if seg.strip()]
-            CFG.setdefault("home_assistant", {})["include_domains"] = items
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "허용 도메인 목록이 저장되었습니다.")
-        elif mode == "await_ha_entities":
-            items = [seg.strip() for seg in re.split(r"[\s,]+", text) if seg.strip()]
-            CFG.setdefault("home_assistant", {})["include_entities"] = items
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "허용 엔티티 목록이 저장되었습니다.")
-        elif mode == "await_bus_key":
-            CFG.setdefault("bus", {})["key"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "서비스키가 저장되었습니다.")
-        elif mode == "await_bus_city":
-            CFG.setdefault("bus", {})["city_code"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "도시 코드가 저장되었습니다.")
-        elif mode == "await_bus_stop_keyword":
-            bus_cfg = CFG.setdefault("bus", {})
-            key = bus_cfg.get("key", "")
-            city = bus_cfg.get("city_code", "")
-            try:
-                stops = bus_search_stops(city, text, key)
-            except Exception as exc:
-                TB.reply_to(m, f"정류소 검색 실패: {exc}")
-                return
-            if not stops:
-                TB.reply_to(m, "검색 결과가 없습니다. 다른 키워드를 입력해주세요.")
-                return
-            _set_state(uid, {"mode": "await_bus_stop_select", "stop_results": stops})
-            TB.send_message(
-                m.chat.id,
-                "정류소를 선택하세요.",
-                reply_markup=_build_bus_stop_keyboard(stops),
-            )
-        elif mode == "await_weather_key":
-            CFG.setdefault("weather", {})["api_key"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "날씨 API 키가 저장되었습니다.")
-        elif mode == "await_weather_location":
-            CFG.setdefault("weather", {})["location"] = text
-            save_config_to_source(CFG)
-            _clear_state(uid)
-            TB.reply_to(m, "날씨 위치가 저장되었습니다.")
-
-# === [SECTION: Telegram start (webhook or polling) + duplication guard] ======
-# - 파일락(/tmp/scal_bot.lock)으로 중복 폴링 방지 (다중 토큰/다중 인스턴스 보호)
-_lock_file = None
-def start_telegram():
-    """Start telegram in single-instance mode using a file lock."""
-    global _lock_file
-    if not TB:
-        if CFG["telegram"].get("bot_token") and not telebot:
-            print("[TG] pyTelegramBotAPI 미설치로 텔레그램을 비활성화합니다.")
-        else:
-            print("[TG] Telegram not configured (no bot token).")
-        return
-    # acquire lock file to avoid double polling
-    try:
-        _lock_file = open("/tmp/scal_bot.lock", "w")
-        fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_file.write(str(os.getpid()))
-        _lock_file.flush()
-    except Exception:
-        print("[TG] Another instance is already running. Skipping telegram start.")
-        return
-
-    mode = CFG["telegram"].get("mode", "polling")
-    if mode == "webhook":
-        base = CFG["telegram"].get("webhook_base", "").rstrip("/")
-        if not base:
-            print("[TG] webhook mode, but webhook_base missing; fallback to polling")
-            return start_polling()
-        secret = CFG["telegram"].get("path_secret") or secrets.token_urlsafe(24)
-        CFG["telegram"]["path_secret"] = secret
-        save_config_to_source(CFG)
-        hook_url = f"{base}/tg/{secret}"
-        TB.remove_webhook()
-        TB.set_webhook(url=hook_url, drop_pending_updates=True)
-        print(f"[TG] Telegram webhook set: {hook_url}")
-
-        @app.post(f"/tg/{secret}")
-        def tg_webhook():
-            if request.headers.get("content-type") != "application/json":
-                abort(403)
-            update = telebot.types.Update.de_json(request.get_data().decode("utf-8"))
-            TB.process_new_updates([update])
-            return "OK"
-    else:
-        start_polling()
-
-def start_polling():
-    TB.remove_webhook()
-    print("[TG] Telegram polling started")
-    TB.infinity_polling(timeout=60, long_polling_timeout=60, allowed_updates=["message", "callback_query"])
-
-# === [SECTION: App entrypoints (web thread + telegram)] ======================
+# === [SECTION: App entrypoint (web only)] ===================================
 def run_web():
-    # debug=False, use_reloader=False to prevent reloader double-start
     try:
         app.run(
             host="0.0.0.0",
@@ -1468,21 +1059,8 @@ def run_web():
 
 
 def main():
-    # 웹 서버 스레드는 daemon 이 아니어야 프로세스가 안 죽음
-    web_thread = threading.Thread(target=run_web, name="scal-web")
-    web_thread.start()
-
-    print(f"[WEB] started on :{CFG['server']['port']}  -> /board")
-
-    # 텔레그램은 옵션: 설정이 없으면 그냥 경고만 찍고 계속 진행
-    try:
-        start_telegram()
-    except Exception as e:
-        # 여기서 토큰 없음 등으로 에러 나도 Flask 만으로 계속 서비스
-        print(f"[TG] Telegram not configured or failed to start: {e}")
-
-    # start_telegram() 이 바로 리턴해도, 웹 스레드가 끝날 때까지 프로세스를 유지
-    web_thread.join()
+    print(f"[WEB] starting on :{CFG['server']['port']}  -> /board")
+    run_web()
 
 
 if __name__ == "__main__":

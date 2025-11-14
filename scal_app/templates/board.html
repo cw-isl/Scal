@@ -133,16 +133,45 @@
   .blk { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px 18px; }
   .blk h3 { margin:0 0 6px 0; font-size:16px; opacity:.95; text-shadow:0 0 6px rgba(0,0,0,.65);}
 
-.todo{ display:flex; flex-direction:column; height:100%; min-height:170px; }
-  .todo .rows { display:grid; grid-template-columns: 1fr 1fr; gap:8px; flex:1 1 auto; }
-  .todo .col { display:flex; flex-direction:column; gap:6px; min-width:0; }
-.todo .item { display:flex; align-items:center; gap:10px; font-size:14px; padding:4px 6px; border-radius:8px; }
-.todo .item.overdue { background:rgba(255,75,75,0.12); }
-.todo .title { flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.todo .due { opacity:.9; min-width:56px; margin-left:auto; font-weight:600; text-align:right; }
-.todo .item.overdue .due { color:#ffb4b4; }
-.todo .message { font-size:13px; opacity:.85; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,.25); }
-.todo .message.error { color:#ffb4b4; }
+.todo { display:flex; flex-direction:column; gap:12px; min-height:200px; }
+  .todo-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .todo-header h3 { margin:0; }
+  .todo-add-btn { background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); color:#fff; border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; transition:background .2s, border-color .2s, transform .2s; }
+  .todo-add-btn:hover { background:rgba(255,255,255,.2); border-color:rgba(255,255,255,.35); }
+  .todo-add-btn:active { transform:scale(.97); }
+  .todo-message { font-size:13px; opacity:.85; padding:10px 12px; border-radius:10px; background:rgba(0,0,0,.25); }
+  .todo-message.error { color:#ffb4b4; }
+  .todo-message.warning { color:#ffe082; }
+  .todo-message.hidden { display:none; }
+  .todo-list { display:flex; flex-direction:column; gap:10px; flex:1 1 auto; overflow:hidden; }
+  .todo-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.08); transition:background .2s, border-color .2s, opacity .2s; }
+  .todo-item.completed { opacity:.6; }
+  .todo-item.overdue { border-color:rgba(255,120,120,.45); box-shadow:0 0 16px rgba(255,120,120,.15); }
+  .todo-item input[type="checkbox"] { width:18px; height:18px; accent-color:#76d5ff; cursor:pointer; }
+  .todo-item .title { flex:1 1 auto; white-space:pre-wrap; word-break:keep-all; line-height:1.35; }
+  .todo-item .due { font-weight:600; min-width:70px; text-align:right; font-size:13px; opacity:.9; }
+  .todo-item.overdue .due { color:#ffb4b4; }
+  .todo-item .actions { display:flex; gap:8px; }
+  .todo-item .actions button { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer; transition:background .2s, border-color .2s, transform .2s; }
+  .todo-item .actions button:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.32); }
+  .todo-item .actions button:active { transform:scale(.96); }
+  .todo-item .actions button.danger { color:#ffb4b4; border-color:rgba(255,120,120,.4); background:rgba(255,120,120,.12); }
+  .todo-item .actions button.danger:hover { background:rgba(255,120,120,.2); border-color:rgba(255,120,120,.55); }
+
+  .todo-modal[hidden] { display:none; }
+  .todo-modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:1200; padding:20px; }
+  .todo-modal-dialog { background:rgba(20,22,29,.95); border:1px solid rgba(255,255,255,.15); border-radius:16px; padding:22px 24px; max-width:420px; width:100%; box-shadow:0 18px 36px rgba(0,0,0,.4); display:flex; flex-direction:column; gap:16px; }
+  .todo-modal-dialog h4 { margin:0; font-size:18px; }
+  .todo-modal-dialog label { font-size:13px; opacity:.9; margin-bottom:4px; display:block; }
+  .todo-modal-dialog textarea { width:100%; min-height:96px; resize:vertical; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(0,0,0,.35); color:#fff; padding:10px 12px; font-family:inherit; font-size:14px; }
+  .todo-modal-dialog input[type="date"] { width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(0,0,0,.35); color:#fff; padding:10px 12px; font-size:14px; }
+  .todo-modal-error { font-size:13px; color:#ffb4b4; }
+  .todo-modal-error[hidden] { display:none; }
+  .todo-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+  .todo-modal-actions button { border-radius:999px; padding:8px 18px; font-size:13px; cursor:pointer; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff; transition:background .2s, border-color .2s, transform .2s; }
+  .todo-modal-actions button.secondary { background:transparent; border-color:rgba(255,255,255,.18); }
+  .todo-modal-actions button:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.35); }
+  .todo-modal-actions button:active { transform:scale(.97); }
 
   .bus{display:flex; flex-direction:column; gap:10px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:16px 18px; height:100%; min-height:190px;}
   .bus .arrivals{display:flex; flex-direction:column; gap:8px; min-width:0; flex:1 1 auto;}
@@ -335,11 +364,12 @@
       <div class="section-left">
         <div class="verse blk"><h3>Today's Verse</h3><div id="verse" class="text"></div></div>
         <div class="todo blk">
-          <h3>Todo</h3>
-          <div class="rows">
-            <div class="col" id="todo-col-1"></div>
-            <div class="col" id="todo-col-2"></div>
+          <div class="todo-header">
+            <h3>Todo</h3>
+            <button type="button" class="todo-add-btn" id="todo-add-btn">+ 추가</button>
           </div>
+          <div class="todo-message hidden" id="todo-message"></div>
+          <div class="todo-list" id="todo-list"></div>
         </div>
         <div class="bus blk">
           <div class="arrivals">
@@ -362,6 +392,27 @@
     <div class="weather blk" id="weather"></div>
   </div>
 </div>
+</div>
+
+<div class="todo-modal" id="todo-modal" hidden>
+  <div class="todo-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
+    <form id="todo-form">
+      <h4 id="todo-modal-title">할 일 추가</h4>
+      <div>
+        <label for="todo-title-input">내용</label>
+        <textarea id="todo-title-input" name="title" maxlength="500" placeholder="할 일을 입력하세요" required></textarea>
+      </div>
+      <div>
+        <label for="todo-date-input">날짜</label>
+        <input id="todo-date-input" name="due_date" type="date"/>
+      </div>
+      <div class="todo-modal-error" id="todo-modal-error" hidden></div>
+      <div class="todo-modal-actions">
+        <button type="button" class="secondary" id="todo-cancel-btn">취소</button>
+        <button type="submit" id="todo-submit-btn">저장</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -494,72 +545,269 @@ async function loadEvents(){
 }
 loadEvents(); setInterval(loadEvents, 5*60*1000);
 
-function clearTodoColumns(){
-  const c1=document.getElementById('todo-col-1');
-  const c2=document.getElementById('todo-col-2');
-  if (c1) c1.innerHTML='';
-  if (c2) c2.innerHTML='';
-  return [c1,c2];
-}
+const todoListEl = document.getElementById('todo-list');
+const todoMessageEl = document.getElementById('todo-message');
+const todoAddBtn = document.getElementById('todo-add-btn');
+const todoModal = document.getElementById('todo-modal');
+const todoForm = document.getElementById('todo-form');
+const todoTitleInput = document.getElementById('todo-title-input');
+const todoDateInput = document.getElementById('todo-date-input');
+const todoModalTitle = document.getElementById('todo-modal-title');
+const todoModalError = document.getElementById('todo-modal-error');
+const todoCancelBtn = document.getElementById('todo-cancel-btn');
+let todoItems = [];
+let editingTodoId = null;
 
-function showTodoMessage(text, isError=false){
-  const [c1,c2]=clearTodoColumns();
-  if (!c1) return;
-  const msg=document.createElement('div');
-  msg.className='message'+(isError?' error':'');
-  msg.textContent=text;
-  c1.appendChild(msg);
-}
-
-function renderTodoItems(items){
-  const [c1,c2]=clearTodoColumns();
-  if (!c1 || !c2) return;
-  const cols=[c1,c2];
-  const limited=items.slice(0,8);
-  limited.forEach((task, idx)=>{
-    const row=document.createElement('div');
-    row.className='item';
-    if (task.overdue) row.classList.add('overdue');
-    const title=document.createElement('div');
-    title.className='title';
-    title.textContent=task.title || '(untitled)';
-    const due=document.createElement('div');
-    due.className='due';
-    due.textContent=task.due_label || '—';
-    row.appendChild(title);
-    row.appendChild(due);
-    cols[idx % cols.length].appendChild(row);
-  });
-}
-
-async function loadTodo(){
-  try{
-    const res=await fetch('/api/todo');
-    const data=await res.json();
-    if (!res.ok){
-      throw new Error(data.error || 'failed');
-    }
-    if (data.need_config){
-      showTodoMessage('설정 화면에서 Todoist API 토큰을 입력하세요.');
-      return;
-    }
-    if (data.error){
-      showTodoMessage(data.error, true);
-      return;
-    }
-    const items=Array.isArray(data.items)?data.items:[];
-    if (!items.length){
-      showTodoMessage('오늘은 완료할 일이 없어요!');
-      return;
-    }
-    renderTodoItems(items);
-  }catch(err){
-    console.error('Failed to load todo list', err);
-    showTodoMessage('할 일을 불러오지 못했습니다.', true);
+function setTodoMessage(text, type = 'info') {
+  if (!todoMessageEl) return;
+  if (!text) {
+    todoMessageEl.textContent = '';
+    todoMessageEl.classList.add('hidden');
+    todoMessageEl.classList.remove('error', 'warning');
+    return;
+  }
+  todoMessageEl.textContent = text;
+  todoMessageEl.classList.remove('hidden');
+  todoMessageEl.classList.remove('error', 'warning');
+  if (type === 'error') {
+    todoMessageEl.classList.add('error');
+  } else if (type === 'warning') {
+    todoMessageEl.classList.add('warning');
   }
 }
 
-loadTodo(); setInterval(loadTodo, 60*1000);
+function normalizeTodoItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.slice();
+}
+
+function parseDueDate(value) {
+  if (!value) return null;
+  const parts = value.split('-');
+  if (parts.length !== 3) return null;
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function isOverdue(item) {
+  if (!item || !item.due_date || item.completed) return false;
+  const due = parseDueDate(item.due_date);
+  if (!due) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return due < today;
+}
+
+function formatTodoDate(value) {
+  if (!value) return '';
+  const parts = value.split('-');
+  if (parts.length === 3) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}`;
+  }
+  return value;
+}
+
+function closeTodoModal() {
+  if (!todoModal) return;
+  editingTodoId = null;
+  todoForm?.reset();
+  if (todoModalError) {
+    todoModalError.textContent = '';
+    todoModalError.hidden = true;
+  }
+  todoModal.setAttribute('hidden', 'true');
+}
+
+function openTodoModal(item) {
+  if (!todoModal) return;
+  editingTodoId = item && item.id ? item.id : null;
+  if (todoModalTitle) {
+    todoModalTitle.textContent = editingTodoId ? '할 일 수정' : '할 일 추가';
+  }
+  if (todoTitleInput) {
+    todoTitleInput.value = item && item.title ? item.title : '';
+  }
+  if (todoDateInput) {
+    todoDateInput.value = item && item.due_date ? item.due_date : '';
+  }
+  if (todoModalError) {
+    todoModalError.textContent = '';
+    todoModalError.hidden = true;
+  }
+  todoModal.removeAttribute('hidden');
+  setTimeout(() => todoTitleInput?.focus(), 10);
+}
+
+function renderTodoItems() {
+  if (!todoListEl) return;
+  todoListEl.innerHTML = '';
+  setTodoMessage('');
+  if (!Array.isArray(todoItems) || todoItems.length === 0) {
+    setTodoMessage('할 일을 추가해보세요.');
+    return;
+  }
+  let hasOverdue = false;
+  todoItems.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'todo-item';
+    if (item.completed) row.classList.add('completed');
+    if (isOverdue(item)) {
+      row.classList.add('overdue');
+      hasOverdue = true;
+    }
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !!item.completed;
+    checkbox.addEventListener('change', () => toggleTodoCompletion(item, checkbox, checkbox.checked));
+    row.appendChild(checkbox);
+
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = item.title || '(제목 없음)';
+    row.appendChild(title);
+
+    const due = document.createElement('div');
+    due.className = 'due';
+    due.textContent = item.due_date ? formatTodoDate(item.due_date) : '';
+    row.appendChild(due);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.textContent = '수정';
+    editBtn.addEventListener('click', () => openTodoModal(item));
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.textContent = '삭제';
+    deleteBtn.classList.add('danger');
+    deleteBtn.addEventListener('click', () => confirmDeleteTodo(item));
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+    row.appendChild(actions);
+
+    todoListEl.appendChild(row);
+  });
+  if (hasOverdue) {
+    setTodoMessage('기한이 지난 할 일이 있습니다.', 'warning');
+  }
+}
+
+async function fetchTodoItems() {
+  try {
+    const res = await fetch('/api/todo');
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || '할 일을 불러오지 못했습니다.');
+    }
+    todoItems = normalizeTodoItems(data.items);
+    renderTodoItems();
+  } catch (err) {
+    console.error('Failed to load todo list', err);
+    setTodoMessage('할 일을 불러오지 못했습니다.', 'error');
+  }
+}
+
+async function requestTodoUpdate(url, method, payload) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || '요청을 처리하지 못했습니다.');
+  }
+  if (Array.isArray(data.items)) {
+    todoItems = normalizeTodoItems(data.items);
+    renderTodoItems();
+  }
+  return data;
+}
+
+async function toggleTodoCompletion(item, checkbox, desired) {
+  try {
+    await requestTodoUpdate(`/api/todo/${item.id}`, 'PATCH', { completed: desired });
+  } catch (err) {
+    console.error('Failed to update todo', err);
+    if (checkbox) checkbox.checked = !desired;
+    setTodoMessage(err.message || '할 일을 갱신하지 못했습니다.', 'error');
+  }
+}
+
+function confirmDeleteTodo(item) {
+  if (!item || !item.id) return;
+  if (!window.confirm('이 할 일을 삭제할까요?')) return;
+  deleteTodo(item.id);
+}
+
+async function deleteTodo(id) {
+  try {
+    await requestTodoUpdate(`/api/todo/${id}`, 'DELETE');
+    if (todoItems.length === 0) {
+      setTodoMessage('할 일을 추가해보세요.');
+    }
+  } catch (err) {
+    console.error('Failed to delete todo', err);
+    setTodoMessage(err.message || '할 일을 삭제하지 못했습니다.', 'error');
+  }
+}
+
+async function handleTodoSubmit(event) {
+  event.preventDefault();
+  const title = todoTitleInput ? todoTitleInput.value.trim() : '';
+  const dueDate = todoDateInput ? todoDateInput.value.trim() : '';
+  if (!title) {
+    if (todoModalError) {
+      todoModalError.textContent = '할 일 내용을 입력하세요.';
+      todoModalError.hidden = false;
+    }
+    todoTitleInput?.focus();
+    return;
+  }
+  const payload = { title, due_date: dueDate };
+  const method = editingTodoId ? 'PATCH' : 'POST';
+  const url = editingTodoId ? `/api/todo/${editingTodoId}` : '/api/todo';
+  try {
+    await requestTodoUpdate(url, method, payload);
+    closeTodoModal();
+  } catch (err) {
+    console.error('Failed to save todo', err);
+    if (todoModalError) {
+      todoModalError.textContent = err.message || '할 일을 저장하지 못했습니다.';
+      todoModalError.hidden = false;
+    }
+  }
+}
+
+if (todoAddBtn) {
+  todoAddBtn.addEventListener('click', () => openTodoModal(null));
+}
+if (todoCancelBtn) {
+  todoCancelBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeTodoModal();
+  });
+}
+if (todoForm) {
+  todoForm.addEventListener('submit', handleTodoSubmit);
+}
+if (todoModal) {
+  todoModal.addEventListener('click', (event) => {
+    if (event.target === todoModal) {
+      closeTodoModal();
+    }
+  });
+}
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && todoModal && !todoModal.hasAttribute('hidden')) {
+    closeTodoModal();
+  }
+});
+
+fetchTodoItems();
+setInterval(fetchTodoItems, 60 * 1000);
 
 // ===== Weather block (final: card-style 5-day forecast) =====
 async function loadWeather() {

@@ -330,7 +330,7 @@
 <div class="container">
   <header>
     <h1>Smart Frame 설정</h1>
-    <p>텔레그램에서만 가능했던 설정을 이 페이지에서 한눈에 관리하세요.</p>
+    <p>스마트 프레임에 필요한 주요 설정을 한눈에 관리하세요.</p>
   </header>
   <div class="groups">
     <section class="group" id="keys-settings">
@@ -339,30 +339,6 @@
         <p>Smart Frame과 연동되는 외부 서비스의 토큰과 기본 주소를 관리하세요.</p>
       </div>
       <div class="cards">
-        <section class="card" id="todoist-card">
-          <h2>Todoist</h2>
-          <form data-section="todoist">
-            <div class="field">
-              <label for="todoist-token">API 토큰</label>
-              <div class="input-row">
-                <input id="todoist-token" name="api_token" type="password" placeholder="Todoist API Token"/>
-                <button type="button" class="secret-toggle" data-toggle="todoist-token">보기</button>
-              </div>
-              <p class="muted">Todoist 웹에서 <strong>Settings &gt; Integrations</strong> 메뉴에서 API 토큰을 확인할 수 있습니다.</p>
-            </div>
-            <div class="field">
-              <label for="todoist-project">프로젝트 ID (선택)</label>
-              <div class="input-row">
-                <input id="todoist-project" name="project_id" type="text" placeholder="특정 프로젝트만 불러오려면 입력"/>
-              </div>
-            </div>
-            <div class="actions">
-              <button type="submit">저장</button>
-              <span class="status" hidden></span>
-            </div>
-          </form>
-        </section>
-
         <section class="card" id="home-assistant-card">
           <h2>Home Assistant</h2>
           <form data-section="home_assistant">
@@ -505,29 +481,6 @@
           </form>
         </section>
 
-        <section class="card" id="telegram-card">
-          <h2>텔레그램</h2>
-          <form data-section="telegram">
-            <div class="field">
-              <label for="tg-token">봇 토큰</label>
-              <div class="input-row">
-                <input id="tg-token" name="bot_token" type="password" placeholder="123456:ABC..."/>
-                <button type="button" class="secret-toggle" data-toggle="tg-token">보기</button>
-              </div>
-            </div>
-            <div class="field">
-              <label for="tg-ids">허용 사용자 ID</label>
-              <div class="input-row">
-                <input id="tg-ids" name="allowed_user_ids" type="text" placeholder="예: 12345678, 987654321"/>
-              </div>
-              <p class="muted">쉼표 또는 줄바꿈으로 여러 Telegram user ID를 입력하세요. 비워두면 모두 허용됩니다.</p>
-            </div>
-            <div class="actions">
-              <button type="submit">저장</button>
-              <span class="status" hidden></span>
-            </div>
-          </form>
-        </section>
       </div>
     </section>
 
@@ -838,7 +791,7 @@ function resetLayoutToDefaults() {
 
 function fillFields() {
   if (!state.config) return;
-  const { frame, home_assistant, bus, weather, telegram, todoist } = state.config;
+  const { frame, home_assistant, bus, weather } = state.config;
   const setValue = (id, value='') => {
     const el = document.getElementById(id);
     if (el) el.value = value || '';
@@ -861,14 +814,6 @@ function fillFields() {
   if (weather) {
     setValue('weather-key', weather.api_key);
     setValue('weather-location', weather.location);
-  }
-  if (telegram) {
-    setValue('tg-token', telegram.bot_token);
-    setValue('tg-ids', telegram.allowed_user_ids_text);
-  }
-  if (todoist) {
-    setValue('todoist-token', todoist.api_token);
-    setValue('todoist-project', todoist.project_id);
   }
 }
 

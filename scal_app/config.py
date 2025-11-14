@@ -8,13 +8,14 @@ import os
 import tempfile
 from datetime import timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 LOGGER = logging.getLogger(__name__)
 
 BASE = Path(os.environ.get("SCAL_DATA_DIR", "/root/scal")).expanduser()
 STATE_PATH = BASE / "sframe_state.json"
 PHOTOS_DIR = BASE / "frame_photos"
+TODOS_PATH = BASE / "todos.json"
 GCLIENT_PATH = BASE / "google_client_secret.json"
 GTOKEN_PATH = BASE / "google_token.json"
 CONFIG_PATH = Path(os.environ.get("SCAL_CONFIG_FILE", BASE / "config.yaml")).expanduser()
@@ -22,6 +23,7 @@ VERSE_PATH = Path(os.environ.get("SCAL_VERSE_FILE", BASE / "verse.txt")).expandu
 
 BASE.mkdir(parents=True, exist_ok=True)
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+TODOS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def set_config_source(path: Path) -> None:
@@ -195,13 +197,6 @@ DEFAULT_CFG: Dict[str, Any] = {
         "location": "Seoul, South Korea",
         "units": "metric",
     },
-    "telegram": {
-        "bot_token": "",
-        "allowed_user_ids": [],
-        "mode": "polling",
-        "webhook_base": "",
-        "path_secret": "",
-    },
     "home_assistant": {
         "base_url": "http://homeassistant.local:8123",
         "token": "",
@@ -214,7 +209,6 @@ DEFAULT_CFG: Dict[str, Any] = {
     },
     "bus": {"city_code": "", "node_id": "", "key": ""},
     "photos": {"album": "default"},
-    "todoist": {"api_token": "", "project_id": ""},
 }
 
 CFG: Dict[str, Any] = load_config(DEFAULT_CFG)
@@ -347,3 +341,26 @@ def load_state() -> Dict[str, Any]:
 
 def save_state(data: Dict[str, Any]) -> None:
     STATE_PATH.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+def load_todos() -> List[Dict[str, Any]]:
+    if not TODOS_PATH.exists():
+        return []
+    try:
+        data = json.loads(TODOS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        LOGGER.warning("Failed to read todo storage", exc_info=True)
+        return []
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    LOGGER.warning("Todo storage is not a list; ignoring content")
+    return []
+
+
+def save_todos(items: List[Dict[str, Any]]) -> None:
+    try:
+        text = json.dumps(items, ensure_ascii=False, indent=2)
+    except Exception:
+        LOGGER.warning("Failed to serialize todos; storing compact form", exc_info=True)
+        text = json.dumps(items, ensure_ascii=False)
+    _atomic_write(TODOS_PATH, text)
