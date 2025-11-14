@@ -8,11 +8,12 @@
 <style>
   :root { --W:1080px; --H:1920px; --top:90px; --cal:1020px;
           --weather:320px; --layout-left:460px; --section-gap:26px;
-          --bg-pos-x:50%; --bg-pos-y:50%;
+          --bg-pos-x:50%; --bg-pos-y:50%; --mobile-scale:1;
           --section-card-gap:calc(var(--section-gap) - 4px); }
 
   /* Global layout */
-  html,body { margin:0; padding:0; background:transparent; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
+  html,body { margin:0; padding:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Roboto,'Noto Sans KR',sans-serif; }
+  body { min-height:100vh; }
   .frame-wrapper { width:var(--W); min-height:var(--H); margin:0 auto; position:relative; }
   .frame { width:var(--W); min-height:var(--H); display:flex; flex-direction:column; position:relative; }
 
@@ -286,9 +287,9 @@
     margin:0;
     position:absolute;
     top:0;
-    left:var(--H);
-    transform:rotate(90deg);
+    left:0;
     transform-origin:top left;
+    transform:rotate(90deg) translateY(-100%);
     overflow:hidden;
   }
   body.rotate-90 .frame {
@@ -317,11 +318,62 @@
     height:var(--W);
     margin:0;
     position:absolute;
-    top:var(--W);
+    top:0;
     left:0;
-    transform:rotate(-90deg);
     transform-origin:top left;
+    transform:rotate(-90deg) translateX(-100%);
     overflow:hidden;
+  }
+
+  /* Mobile layout adjustments */
+  body.mobile-layout {
+    width:auto;
+    height:auto;
+    min-height:100vh;
+    padding:18px 12px 48px;
+    box-sizing:border-box;
+    overflow-x:hidden;
+    touch-action:auto;
+  }
+  body.mobile-layout .frame-wrapper {
+    position:relative;
+    top:auto;
+    left:auto;
+    margin:0 auto;
+    transform-origin:top center;
+  }
+  body.mobile-layout .frame {
+    border-radius:24px;
+    overflow:hidden;
+    box-shadow:0 24px 48px rgba(0,0,0,.45);
+  }
+  body.mobile-layout .bg,
+  body.mobile-layout .bg2 {
+    border-radius:24px;
+  }
+  body.mobile-layout.rotate-90,
+  body.mobile-layout.rotate-neg-90 {
+    width:auto;
+    height:auto;
+    overflow:auto;
+    touch-action:auto;
+  }
+  body.mobile-layout.rotate-90 .frame-wrapper,
+  body.mobile-layout.rotate-neg-90 .frame-wrapper {
+    position:relative;
+    top:auto;
+    left:auto;
+    width:var(--W);
+    min-height:var(--H);
+    height:auto;
+    transform:none !important;
+  }
+  .mobile-spacer {
+    display:none;
+  }
+  body.mobile-layout .mobile-spacer {
+    display:block;
+    height:calc(var(--H) * var(--mobile-scale));
   }
   body.rotate-neg-90 .frame {
     width:var(--W);
@@ -391,19 +443,67 @@
     <div class="weather blk" id="weather"></div>
   </div>
 </div>
+<div class="mobile-spacer" id="mobileSpacer" aria-hidden="true"></div>
 </div>
 
 <script>
+const params = new URLSearchParams(window.location.search);
+const viewParam = (params.get('view') || params.get('mode') || '').toLowerCase();
+const mobileParam = (params.get('mobile') || params.get('mobile_layout') || '').toLowerCase();
+const isMobileLayout = ['mobile','m','true','1','yes','on'].includes(viewParam)
+  || ['mobile','m','true','1','yes','on'].includes(mobileParam);
+
+if (isMobileLayout) {
+  document.body.classList.add('mobile-layout');
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1, user-scalable=yes');
+  }
+}
+
 // Apply optional rotation when URL query contains rotate=right/cw/90 or left/ccw/-90
-(function(){
-  const params = new URLSearchParams(window.location.search);
+if (!isMobileLayout) {
   const rot = (params.get('rotate') || params.get('orientation') || '').toLowerCase();
   if (['90','90cw','cw','right','clockwise'].includes(rot)) {
     document.body.classList.add('rotate-90');
   } else if (['-90','90ccw','ccw','left','counterclockwise','270','270ccw','270cw'].includes(rot)) {
     document.body.classList.add('rotate-neg-90');
   }
-})();
+}
+
+let lastMobileScale = 0;
+let lastMobileHeight = 0;
+function updateMobileScale() {
+  if (!isMobileLayout) return;
+  const frameWrapper = document.getElementById('frameWrapper');
+  const spacer = document.getElementById('mobileSpacer');
+  if (!frameWrapper || !spacer) return;
+  const rootStyles = getComputedStyle(document.documentElement);
+  const bodyStyles = getComputedStyle(document.body);
+  const widthValue = parseFloat(rootStyles.getPropertyValue('--W')) || frameWrapper.offsetWidth || 1;
+  const heightValue = parseFloat(rootStyles.getPropertyValue('--H')) || frameWrapper.offsetHeight || 1;
+  const paddingX = parseFloat(bodyStyles.paddingLeft || '0') + parseFloat(bodyStyles.paddingRight || '0');
+  const viewportWidth = Math.max(320, window.innerWidth || document.documentElement.clientWidth || widthValue);
+  const availableWidth = Math.max(120, viewportWidth - paddingX);
+  const scale = Math.min(1, availableWidth / widthValue);
+  if (!Number.isFinite(scale) || scale <= 0) return;
+  const heightChanged = Math.abs(heightValue - lastMobileHeight) >= 0.5;
+  if (!heightChanged && Math.abs(scale - lastMobileScale) < 0.001) return;
+  lastMobileScale = scale;
+  lastMobileHeight = heightValue;
+  frameWrapper.style.transform = `scale(${scale})`;
+  frameWrapper.style.transformOrigin = 'top center';
+  document.documentElement.style.setProperty('--mobile-scale', String(scale));
+  document.body.style.setProperty('--mobile-scale', String(scale));
+  spacer.style.height = `${Math.ceil(heightValue * scale) + 48}px`;
+}
+
+if (isMobileLayout) {
+  window.addEventListener('resize', () => updateMobileScale());
+  window.addEventListener('orientationchange', () => {
+    setTimeout(updateMobileScale, 150);
+  });
+}
 
 async function applyLayoutFromConfig(){
   const root = document.documentElement;
@@ -436,10 +536,18 @@ async function applyLayoutFromConfig(){
     });
   } catch (err) {
     console.warn('Failed to load frame layout settings:', err);
+  } finally {
+    if (isMobileLayout) {
+      requestAnimationFrame(updateMobileScale);
+    }
   }
 }
 
 applyLayoutFromConfig();
+
+if (isMobileLayout) {
+  updateMobileScale();
+}
 
 function z(n){return n<10?'0'+n:n}
 function tick(){
