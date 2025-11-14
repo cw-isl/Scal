@@ -205,6 +205,28 @@
   .home .ha-status{grid-column:1 / -1; padding:12px 16px; border-radius:12px; background:rgba(0,0,0,.32); font-size:14px; text-align:center; line-height:1.4;}
   .home .ha-device:active{transform:scale(.97);}
 
+  /* Fine-tune spacing for counter-clockwise (left) rotation to keep weather fully visible */
+  body.rotate-neg-90 .top { height:calc(var(--top) - 6px); padding:0 22px; }
+  body.rotate-neg-90 .cal {
+    min-height:max(780px, calc(var(--cal) - 40px));
+    padding:8px 18px clamp(10px, calc(var(--section-gap) / 2), 18px);
+  }
+  body.rotate-neg-90 .section {
+    padding:clamp(12px, calc(var(--section-gap) / 2), 18px) 20px clamp(18px, calc(var(--section-gap) * 0.8), 28px);
+    gap:clamp(14px, calc(var(--section-gap) - 6px), var(--section-gap));
+  }
+  body.rotate-neg-90 .section-left,
+  body.rotate-neg-90 .section-right {
+    gap:clamp(12px, calc(var(--section-card-gap) - 4px), var(--section-card-gap));
+  }
+  body.rotate-neg-90 .todo { min-height:180px; }
+  body.rotate-neg-90 .bus { min-height:176px; }
+  body.rotate-neg-90 .home { min-height:330px; padding:18px 20px; }
+  body.rotate-neg-90 .weather {
+    margin-top:-6px;
+    padding:12px 16px clamp(12px, calc(var(--section-gap) * 0.55), 18px);
+  }
+
   /* Verse block */
   .verse { flex:0 0 100px; display:flex; flex-direction:column; align-items:flex-start; }
   .verse .text { white-space:pre-wrap; line-height:1.4; font-size:16px; text-shadow:0 0 6px rgba(0,0,0,.65); }
