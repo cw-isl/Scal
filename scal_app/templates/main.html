@@ -303,6 +303,180 @@
     padding:8px 10px;
     font-size:13px;
   }
+  .todo-panel-body {
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .todo-toolbar {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+  }
+  .todo-toolbar .btn {
+    margin-left:auto;
+  }
+  .todo-message {
+    font-size:14px;
+    color:#1c4a6e;
+    background:#eef6ff;
+    border-radius:12px;
+    padding:10px 14px;
+  }
+  .todo-message[hidden] {
+    display:none;
+  }
+  .todo-message.error {
+    background:#ffecec;
+    color:#c62828;
+  }
+  .todo-message.warning {
+    background:#fff4e5;
+    color:#e65100;
+  }
+  .todo-list {
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .todo-item {
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    padding:14px 16px;
+    border-radius:16px;
+    background:#f6f8ff;
+    border:1px solid rgba(75,107,255,0.14);
+    transition:box-shadow .2s ease, transform .2s ease;
+  }
+  .todo-item:hover {
+    box-shadow:0 16px 28px rgba(20,33,61,0.12);
+    transform:translateY(-1px);
+  }
+  .todo-item.completed {
+    opacity:0.65;
+  }
+  .todo-item.overdue {
+    border-color:rgba(230,81,0,0.35);
+    box-shadow:0 12px 26px rgba(230,81,0,0.15);
+  }
+  .todo-item input[type="checkbox"] {
+    width:18px;
+    height:18px;
+    accent-color:#4b6bff;
+    margin-top:2px;
+  }
+  .todo-item .title {
+    flex:1 1 auto;
+    white-space:pre-wrap;
+    word-break:keep-all;
+    line-height:1.45;
+    color:#2d395b;
+  }
+  .todo-item .due {
+    font-weight:600;
+    font-size:13px;
+    color:#4a5678;
+    min-width:84px;
+    text-align:right;
+  }
+  .todo-item .actions {
+    display:flex;
+    gap:8px;
+  }
+  .todo-item .actions button {
+    padding:6px 12px;
+    border-radius:10px;
+    font-size:13px;
+    background:#eef1ff;
+    color:#2a3570;
+    border:none;
+    cursor:pointer;
+    transition:background .2s ease, transform .2s ease;
+  }
+  .todo-item .actions button:hover {
+    background:#dbe1ff;
+  }
+  .todo-item .actions button:active {
+    transform:translateY(1px);
+  }
+  .todo-item .actions button.danger {
+    background:#ffecec;
+    color:#c62828;
+  }
+  .todo-item .actions button.danger:hover {
+    background:#ffd6d6;
+  }
+  .todo-empty {
+    font-size:14px;
+    color:#5a678a;
+  }
+  .todo-modal[hidden] {
+    display:none;
+  }
+  .todo-modal {
+    position:fixed;
+    inset:0;
+    background:rgba(20,33,61,0.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:1200;
+  }
+  .todo-modal-dialog {
+    background:#ffffff;
+    border-radius:20px;
+    padding:26px 28px;
+    width:100%;
+    max-width:440px;
+    box-shadow:0 24px 48px rgba(20,33,61,0.25);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .todo-modal-dialog h3 {
+    margin:0;
+    font-size:20px;
+    color:#1c2f57;
+  }
+  .todo-modal-dialog label {
+    font-size:14px;
+    font-weight:600;
+    color:#2d395b;
+    margin-bottom:6px;
+    display:block;
+  }
+  .todo-modal-dialog textarea {
+    width:100%;
+    min-height:110px;
+    resize:vertical;
+    border-radius:14px;
+    border:1px solid rgba(20,33,61,0.18);
+    padding:12px 14px;
+    font-family:inherit;
+    font-size:15px;
+  }
+  .todo-modal-dialog input[type="date"] {
+    width:100%;
+    border-radius:14px;
+    border:1px solid rgba(20,33,61,0.18);
+    padding:10px 14px;
+    font-size:15px;
+  }
+  .todo-modal-error {
+    font-size:14px;
+    color:#c62828;
+  }
+  .todo-modal-error[hidden] {
+    display:none;
+  }
+  .todo-modal-actions {
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+  }
   .muted {
     font-size:13px;
     color:#5a678a;
@@ -382,6 +556,20 @@
             </div>
           </form>
         </article>
+        <article class="panel" id="todo-panel">
+          <header class="panel-header">
+            <h2>할 일 관리</h2>
+            <p>Smart Frame Todo를 등록하고 정리하세요.</p>
+          </header>
+          <div class="todo-panel-body">
+            <div class="todo-toolbar">
+              <span class="muted">추가한 항목이 Smart Frame에 바로 반영됩니다.</span>
+              <button type="button" class="btn" id="todo-add-btn">+ 할 일 추가</button>
+            </div>
+            <div class="todo-message" id="todo-message" hidden></div>
+            <div class="todo-list" id="todo-list"></div>
+          </div>
+        </article>
         <article class="panel" id="photos-panel">
           <header class="panel-header">
             <h2>사진 업로드</h2>
@@ -405,6 +593,26 @@
       </div>
     </section>
   </main>
+  <div class="todo-modal" id="todo-modal" hidden>
+    <div class="todo-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
+      <form id="todo-form">
+        <h3 id="todo-modal-title">할 일 추가</h3>
+        <div>
+          <label for="todo-title-input">내용</label>
+          <textarea id="todo-title-input" name="title" maxlength="500" placeholder="할 일을 입력하세요" required></textarea>
+        </div>
+        <div>
+          <label for="todo-date-input">날짜</label>
+          <input id="todo-date-input" name="due_date" type="date"/>
+        </div>
+        <div class="todo-modal-error" id="todo-modal-error" hidden></div>
+        <div class="todo-modal-actions">
+          <button type="button" class="btn-secondary" id="todo-cancel-btn">취소</button>
+          <button type="submit" class="btn">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <footer>© Smart Frame</footer>
   <script>
     const verseForm = document.getElementById('verse-form');
@@ -740,6 +948,286 @@
         event.preventDefault();
       }
     });
+
+    (function initDashboardTodo() {
+      const todoListEl = document.getElementById('todo-list');
+      const todoMessageEl = document.getElementById('todo-message');
+      const todoAddBtn = document.getElementById('todo-add-btn');
+      const todoModal = document.getElementById('todo-modal');
+      const todoForm = document.getElementById('todo-form');
+      const todoTitleInput = document.getElementById('todo-title-input');
+      const todoDateInput = document.getElementById('todo-date-input');
+      const todoModalTitle = document.getElementById('todo-modal-title');
+      const todoModalError = document.getElementById('todo-modal-error');
+      const todoCancelBtn = document.getElementById('todo-cancel-btn');
+
+      if (!todoListEl || !todoAddBtn || !todoModal || !todoForm) {
+        return;
+      }
+
+      let todoItems = [];
+      let editingTodoId = null;
+
+      function setTodoMessage(text, type = 'info') {
+        if (!todoMessageEl) return;
+        if (!text) {
+          todoMessageEl.textContent = '';
+          todoMessageEl.hidden = true;
+          todoMessageEl.classList.remove('error', 'warning');
+          return;
+        }
+        todoMessageEl.hidden = false;
+        todoMessageEl.textContent = text;
+        todoMessageEl.classList.remove('error', 'warning');
+        if (type === 'error') {
+          todoMessageEl.classList.add('error');
+        } else if (type === 'warning') {
+          todoMessageEl.classList.add('warning');
+        }
+      }
+
+      function normalizeTodoItems(items) {
+        if (!Array.isArray(items)) return [];
+        return items.slice();
+      }
+
+      function parseDueDate(value) {
+        if (!value) return null;
+        const parts = value.split('-');
+        if (parts.length !== 3) return null;
+        const d = new Date(`${value}T00:00:00`);
+        if (Number.isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+
+      function isOverdue(item) {
+        if (!item || !item.due_date || item.completed) return false;
+        const due = parseDueDate(item.due_date);
+        if (!due) return false;
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return due < today;
+      }
+
+      function formatTodoDate(value) {
+        if (!value) return '';
+        const parts = value.split('-');
+        if (parts.length === 3) {
+          return `${parts[0]}.${parts[1]}.${parts[2]}`;
+        }
+        return value;
+      }
+
+      function closeTodoModal() {
+        if (!todoModal) return;
+        editingTodoId = null;
+        todoForm.reset();
+        if (todoModalError) {
+          todoModalError.textContent = '';
+          todoModalError.hidden = true;
+        }
+        todoModal.setAttribute('hidden', 'true');
+      }
+
+      function openTodoModal(item) {
+        if (!todoModal) return;
+        editingTodoId = item && item.id ? item.id : null;
+        if (todoModalTitle) {
+          todoModalTitle.textContent = editingTodoId ? '할 일 수정' : '할 일 추가';
+        }
+        if (todoTitleInput) {
+          todoTitleInput.value = item && item.title ? item.title : '';
+        }
+        if (todoDateInput) {
+          todoDateInput.value = item && item.due_date ? item.due_date : '';
+        }
+        if (todoModalError) {
+          todoModalError.textContent = '';
+          todoModalError.hidden = true;
+        }
+        todoModal.removeAttribute('hidden');
+        setTimeout(() => todoTitleInput?.focus(), 10);
+      }
+
+      function renderTodoItems() {
+        if (!todoListEl) return;
+        todoListEl.innerHTML = '';
+        if (!Array.isArray(todoItems) || todoItems.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'todo-empty';
+          empty.textContent = '등록된 할 일이 없습니다. "할 일 추가" 버튼으로 새 항목을 만들어보세요.';
+          todoListEl.appendChild(empty);
+          return;
+        }
+        let hasOverdue = false;
+        todoItems.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'todo-item';
+          if (item.completed) row.classList.add('completed');
+          if (isOverdue(item)) {
+            row.classList.add('overdue');
+            hasOverdue = true;
+          }
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = !!item.completed;
+          checkbox.addEventListener('change', () => toggleTodoCompletion(item, checkbox, checkbox.checked));
+          row.appendChild(checkbox);
+
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = item.title || '(제목 없음)';
+          row.appendChild(title);
+
+          const due = document.createElement('div');
+          due.className = 'due';
+          due.textContent = item.due_date ? formatTodoDate(item.due_date) : '';
+          row.appendChild(due);
+
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.textContent = '수정';
+          editBtn.addEventListener('click', () => openTodoModal(item));
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.textContent = '삭제';
+          deleteBtn.classList.add('danger');
+          deleteBtn.addEventListener('click', () => confirmDeleteTodo(item));
+          actions.appendChild(editBtn);
+          actions.appendChild(deleteBtn);
+          row.appendChild(actions);
+
+          todoListEl.appendChild(row);
+        });
+        if (hasOverdue) {
+          setTodoMessage('기한이 지난 할 일이 있습니다.', 'warning');
+        }
+      }
+
+      async function fetchTodoItems() {
+        setTodoMessage('할 일을 불러오는 중입니다...');
+        try {
+          const res = await fetch('/api/todo');
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || '할 일을 불러오지 못했습니다.');
+          }
+          todoItems = normalizeTodoItems(data.items);
+          setTodoMessage('');
+          renderTodoItems();
+        } catch (err) {
+          console.error('Failed to load todo list', err);
+          setTodoMessage(err.message || '할 일을 불러오지 못했습니다.', 'error');
+        }
+      }
+
+      async function requestTodoUpdate(url, method, payload) {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: payload ? JSON.stringify(payload) : undefined,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || '요청을 처리하지 못했습니다.');
+        }
+        if (Array.isArray(data.items)) {
+          todoItems = normalizeTodoItems(data.items);
+          renderTodoItems();
+        }
+        return data;
+      }
+
+      async function toggleTodoCompletion(item, checkbox, desired) {
+        try {
+          await requestTodoUpdate(`/api/todo/${item.id}`, 'PATCH', { completed: desired });
+          setTodoMessage('할 일 상태를 갱신했습니다.');
+        } catch (err) {
+          console.error('Failed to update todo', err);
+          if (checkbox) checkbox.checked = !desired;
+          setTodoMessage(err.message || '할 일을 갱신하지 못했습니다.', 'error');
+        }
+      }
+
+      function confirmDeleteTodo(item) {
+        if (!item || !item.id) return;
+        if (!window.confirm('이 할 일을 삭제할까요?')) return;
+        deleteTodo(item.id);
+      }
+
+      async function deleteTodo(id) {
+        try {
+          await requestTodoUpdate(`/api/todo/${id}`, 'DELETE');
+          if (todoItems.length === 0) {
+            setTodoMessage('등록된 할 일이 없습니다. 새로운 할 일을 추가해보세요.');
+          } else {
+            setTodoMessage('할 일을 삭제했습니다.');
+          }
+        } catch (err) {
+          console.error('Failed to delete todo', err);
+          setTodoMessage(err.message || '할 일을 삭제하지 못했습니다.', 'error');
+        }
+      }
+
+      async function handleTodoSubmit(event) {
+        event.preventDefault();
+        const title = todoTitleInput ? todoTitleInput.value.trim() : '';
+        const dueDate = todoDateInput ? todoDateInput.value.trim() : '';
+        if (!title) {
+          if (todoModalError) {
+            todoModalError.textContent = '할 일 내용을 입력하세요.';
+            todoModalError.hidden = false;
+          }
+          todoTitleInput?.focus();
+          return;
+        }
+        const payload = { title, due_date: dueDate };
+        const method = editingTodoId ? 'PATCH' : 'POST';
+        const url = editingTodoId ? `/api/todo/${editingTodoId}` : '/api/todo';
+        try {
+          if (todoModalError) {
+            todoModalError.textContent = '';
+            todoModalError.hidden = true;
+          }
+          setTodoMessage('저장 중입니다...');
+          await requestTodoUpdate(url, method, payload);
+          closeTodoModal();
+          setTodoMessage('할 일을 저장했습니다.');
+        } catch (err) {
+          console.error('Failed to save todo', err);
+          if (todoModalError) {
+            todoModalError.textContent = err.message || '할 일을 저장하지 못했습니다.';
+            todoModalError.hidden = false;
+          }
+          setTodoMessage(err.message || '할 일을 저장하지 못했습니다.', 'error');
+        }
+      }
+
+      todoAddBtn.addEventListener('click', () => openTodoModal(null));
+      if (todoCancelBtn) {
+        todoCancelBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeTodoModal();
+        });
+      }
+      todoForm.addEventListener('submit', handleTodoSubmit);
+      todoModal.addEventListener('click', (event) => {
+        if (event.target === todoModal) {
+          closeTodoModal();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !todoModal.hasAttribute('hidden')) {
+          closeTodoModal();
+        }
+      });
+
+      fetchTodoItems();
+      setInterval(fetchTodoItems, 60 * 1000);
+    })();
 
     loadVerse();
     loadPhotos({ silent: false });
