@@ -630,8 +630,19 @@ function renderTodoItems() {
     }
     return;
   }
+  const itemsToRender = todoEditingEnabled ? todoItems : todoItems.filter((item) => !item.completed);
+  if (itemsToRender.length === 0) {
+    if (todoEditingEnabled) {
+      setTodoMessage('할 일을 추가해보세요.');
+    } else if (todoItems.some((item) => item.completed)) {
+      setTodoMessage('모든 할 일을 완료했습니다.');
+    } else {
+      setTodoMessage('Scal Dashboard에서 할 일을 추가하세요.');
+    }
+    return;
+  }
   let hasOverdue = false;
-  todoItems.forEach((item) => {
+  itemsToRender.forEach((item) => {
     const row = document.createElement('div');
     row.className = 'todo-item';
     if (item.completed) row.classList.add('completed');
@@ -642,11 +653,13 @@ function renderTodoItems() {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = !!item.completed;
-    if (todoEditingEnabled) {
-      checkbox.addEventListener('change', () => toggleTodoCompletion(item, checkbox, checkbox.checked));
-    } else {
-      checkbox.disabled = true;
-    }
+    checkbox.addEventListener('change', () => {
+      if (!todoEditingEnabled && !checkbox.checked) {
+        checkbox.checked = false;
+        return;
+      }
+      toggleTodoCompletion(item, checkbox, checkbox.checked);
+    });
     row.appendChild(checkbox);
 
     const title = document.createElement('div');
