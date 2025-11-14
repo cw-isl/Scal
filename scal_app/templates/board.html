@@ -366,7 +366,6 @@
         <div class="todo blk">
           <div class="todo-header">
             <h3>Todo</h3>
-            <button type="button" class="todo-add-btn" id="todo-add-btn">+ 추가</button>
           </div>
           <div class="todo-message hidden" id="todo-message"></div>
           <div class="todo-list" id="todo-list"></div>
@@ -392,27 +391,6 @@
     <div class="weather blk" id="weather"></div>
   </div>
 </div>
-</div>
-
-<div class="todo-modal" id="todo-modal" hidden>
-  <div class="todo-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
-    <form id="todo-form">
-      <h4 id="todo-modal-title">할 일 추가</h4>
-      <div>
-        <label for="todo-title-input">내용</label>
-        <textarea id="todo-title-input" name="title" maxlength="500" placeholder="할 일을 입력하세요" required></textarea>
-      </div>
-      <div>
-        <label for="todo-date-input">날짜</label>
-        <input id="todo-date-input" name="due_date" type="date"/>
-      </div>
-      <div class="todo-modal-error" id="todo-modal-error" hidden></div>
-      <div class="todo-modal-actions">
-        <button type="button" class="secondary" id="todo-cancel-btn">취소</button>
-        <button type="submit" id="todo-submit-btn">저장</button>
-      </div>
-    </form>
-  </div>
 </div>
 
 <script>
@@ -555,6 +533,7 @@ const todoDateInput = document.getElementById('todo-date-input');
 const todoModalTitle = document.getElementById('todo-modal-title');
 const todoModalError = document.getElementById('todo-modal-error');
 const todoCancelBtn = document.getElementById('todo-cancel-btn');
+const todoEditingEnabled = Boolean(todoAddBtn);
 let todoItems = [];
 let editingTodoId = null;
 
@@ -644,7 +623,11 @@ function renderTodoItems() {
   todoListEl.innerHTML = '';
   setTodoMessage('');
   if (!Array.isArray(todoItems) || todoItems.length === 0) {
-    setTodoMessage('할 일을 추가해보세요.');
+    if (todoEditingEnabled) {
+      setTodoMessage('할 일을 추가해보세요.');
+    } else {
+      setTodoMessage('Scal Dashboard에서 할 일을 추가하세요.');
+    }
     return;
   }
   let hasOverdue = false;
@@ -659,7 +642,11 @@ function renderTodoItems() {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = !!item.completed;
-    checkbox.addEventListener('change', () => toggleTodoCompletion(item, checkbox, checkbox.checked));
+    if (todoEditingEnabled) {
+      checkbox.addEventListener('change', () => toggleTodoCompletion(item, checkbox, checkbox.checked));
+    } else {
+      checkbox.disabled = true;
+    }
     row.appendChild(checkbox);
 
     const title = document.createElement('div');
@@ -672,20 +659,22 @@ function renderTodoItems() {
     due.textContent = item.due_date ? formatTodoDate(item.due_date) : '';
     row.appendChild(due);
 
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.textContent = '수정';
-    editBtn.addEventListener('click', () => openTodoModal(item));
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.textContent = '삭제';
-    deleteBtn.classList.add('danger');
-    deleteBtn.addEventListener('click', () => confirmDeleteTodo(item));
-    actions.appendChild(editBtn);
-    actions.appendChild(deleteBtn);
-    row.appendChild(actions);
+    if (todoEditingEnabled) {
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = '수정';
+      editBtn.addEventListener('click', () => openTodoModal(item));
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = '삭제';
+      deleteBtn.classList.add('danger');
+      deleteBtn.addEventListener('click', () => confirmDeleteTodo(item));
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+      row.appendChild(actions);
+    }
 
     todoListEl.appendChild(row);
   });
@@ -737,6 +726,7 @@ async function toggleTodoCompletion(item, checkbox, desired) {
 }
 
 function confirmDeleteTodo(item) {
+  if (!todoEditingEnabled) return;
   if (!item || !item.id) return;
   if (!window.confirm('이 할 일을 삭제할까요?')) return;
   deleteTodo(item.id);
@@ -780,31 +770,6 @@ async function handleTodoSubmit(event) {
     }
   }
 }
-
-if (todoAddBtn) {
-  todoAddBtn.addEventListener('click', () => openTodoModal(null));
-}
-if (todoCancelBtn) {
-  todoCancelBtn.addEventListener('click', (event) => {
-    event.preventDefault();
-    closeTodoModal();
-  });
-}
-if (todoForm) {
-  todoForm.addEventListener('submit', handleTodoSubmit);
-}
-if (todoModal) {
-  todoModal.addEventListener('click', (event) => {
-    if (event.target === todoModal) {
-      closeTodoModal();
-    }
-  });
-}
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && todoModal && !todoModal.hasAttribute('hidden')) {
-    closeTodoModal();
-  }
-});
 
 fetchTodoItems();
 setInterval(fetchTodoItems, 60 * 1000);
