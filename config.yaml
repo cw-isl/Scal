@@ -20,16 +20,6 @@ photos:
   album: default
 server:
   port: 5320
-telegram:
-  allowed_user_ids:
-  - 5517670242
-  bot_token: 8279263607:AAEzHxlSYMfsXwP7OpXWw5NB40VTCDfBlJw
-  mode: polling
-  path_secret: ''
-  webhook_base: ''
-todoist:
-  api_token: 0aa4d2a4f95e952a1f635c14d6c6ba7e3b26bc2b
-  project_id: ''
 weather:
   api_key: 9809664c22a3501382380f2781e1a9da
   location: Seoul, South Korea

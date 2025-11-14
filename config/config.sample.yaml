@@ -9,12 +9,6 @@ weather:
   api_key: ""
   location: Seoul, KR
   units: metric
-telegram:
-  bot_token: ""
-  allowed_user_ids: []
-  mode: polling
-  webhook_base: ""
-  path_secret: ""
 home_assistant:
   base_url: http://homeassistant.local:8123
   token: ""
@@ -29,6 +23,3 @@ bus:
   key: ""
 photos:
   album: default
-todoist:
-  api_token: ""
-  project_id: ""

@@ -3,5 +3,4 @@ Werkzeug>=2.3
 requests>=2.31
 PyYAML>=6.0
 ics>=0.7
-pyTelegramBotAPI>=4.14
 gunicorn>=21.2
