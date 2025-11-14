@@ -106,12 +106,16 @@
     color:#1a2f6b;
     outline:none;
   }
-  .hero {
+  .main-content {
     flex:1 1 auto;
+    display:flex;
+    flex-direction:column;
+  }
+  .hero {
     display:flex;
     align-items:center;
     justify-content:center;
-    padding:80px 24px;
+    padding:80px 24px 40px;
   }
   .hero-card {
     background:rgba(255,255,255,0.88);
@@ -134,6 +138,175 @@
     line-height:1.6;
     color:#44516d;
   }
+  .dashboard {
+    padding:0 24px 60px;
+  }
+  .dash-grid {
+    margin:0 auto;
+    width:100%;
+    max-width:960px;
+    display:grid;
+    gap:24px;
+    grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));
+  }
+  .panel {
+    background:rgba(255,255,255,0.92);
+    border-radius:24px;
+    padding:28px 30px;
+    box-shadow:0 22px 42px rgba(20,33,61,0.14);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .panel-header h2 {
+    margin:0;
+    font-size:22px;
+    font-weight:700;
+    color:#1c2f57;
+  }
+  .panel-header p {
+    margin:6px 0 0;
+    font-size:14px;
+    color:#4a5678;
+  }
+  .panel form {
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .panel label {
+    font-size:14px;
+    font-weight:600;
+    color:#2d395b;
+  }
+  .panel textarea {
+    border:1px solid rgba(0,0,0,0.12);
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:15px;
+    min-height:120px;
+    resize:vertical;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .panel textarea:focus {
+    outline:none;
+    border-color:#4b6bff;
+    box-shadow:0 0 0 3px rgba(75,107,255,0.18);
+  }
+  .panel-actions {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+  }
+  .panel-status {
+    font-size:13px;
+    color:#2d7f2d;
+  }
+  .panel-status.error {
+    color:#c62828;
+  }
+  .btn,
+  button {
+    border:none;
+    background:#4b6bff;
+    color:#fff;
+    padding:10px 18px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:hover,
+  button:hover {
+    background:#3957f6;
+    box-shadow:0 12px 22px rgba(75,107,255,0.18);
+  }
+  .btn:active,
+  button:active {
+    transform:translateY(1px);
+  }
+  .btn-secondary {
+    background:#eef1ff;
+    color:#2a3570;
+  }
+  .btn-secondary:hover {
+    background:#dbe1ff;
+  }
+  .input-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+  }
+  .upload-area {
+    border:2px dashed rgba(75,107,255,0.28);
+    border-radius:18px;
+    padding:20px;
+    background:#f6f8ff;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    transition:border-color .2s ease, background .2s ease, box-shadow .2s ease;
+  }
+  .upload-area.dragover {
+    border-color:#4b6bff;
+    background:rgba(75,107,255,0.08);
+    box-shadow:0 14px 26px rgba(75,107,255,0.18);
+  }
+  .upload-area input[type="file"] {
+    display:none;
+  }
+  .upload-summary {
+    font-size:13px;
+    color:#2d3a6b;
+    background:#eef1ff;
+    border-radius:12px;
+    padding:10px 12px;
+    line-height:1.4;
+  }
+  .upload-summary strong {
+    display:block;
+    margin-bottom:4px;
+  }
+  .photos-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:12px;
+  }
+  .photo-item {
+    background:#f6f7fb;
+    border-radius:14px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .photo-item img {
+    width:100%;
+    height:120px;
+    object-fit:cover;
+    border-radius:10px;
+  }
+  .photo-item .name {
+    font-size:13px;
+    color:#333;
+    word-break:break-all;
+  }
+  .photo-item .actions {
+    display:flex;
+    gap:8px;
+  }
+  .photo-item .actions button {
+    flex:1 1 auto;
+    padding:8px 10px;
+    font-size:13px;
+  }
+  .muted {
+    font-size:13px;
+    color:#5a678a;
+  }
   footer {
     text-align:center;
     padding:20px;
@@ -152,6 +325,9 @@
     .hero-card h1 {
       font-size:28px;
     }
+    .dash-grid {
+      grid-template-columns:1fr;
+    }
   }
 </style>
 </head>
@@ -168,7 +344,8 @@
           <a href="/board" role="menuitem">View</a>
           <a href="/settings#keys-settings" role="menuitem">Keys settings</a>
           <a href="/settings#ui-settings" role="menuitem">UI settings</a>
-          <a href="/settings#contents-settings" role="menuitem">Contents settings</a>
+          <a href="http://ttms03.duckdns.org:5320/board?rotate=right" target="_blank" rel="noopener" role="menuitem">Rotate right</a>
+          <a href="http://ttms03.duckdns.org:5320/board?rotate=left" target="_blank" rel="noopener" role="menuitem">Rotate left</a>
         </div>
       </li>
       <li class="menu-item">
@@ -177,20 +354,395 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 5.6a.8.8 0 0 1 1.12-.16L8 8.13l3.68-2.69a.8.8 0 1 1 .96 1.28l-4.16 3.04a.8.8 0 0 1-.96 0L3.36 6.72a.8.8 0 0 1-.16-1.12Z"/></svg>
         </button>
         <div class="dropdown" role="menu">
-          <a href="/board" role="menuitem">board</a>
-          <a href="/board?orientation=landscape_right" role="menuitem">right</a>
-          <a href="/board?orientation=landscape_left" role="menuitem">left</a>
           <a href="http://ttms03.duckdns.org:8123/config/integrations/dashboard" target="_blank" rel="noopener" role="menuitem">add device</a>
         </div>
       </li>
     </ul>
   </nav>
-  <main class="hero">
-    <div class="hero-card">
-      <h1>Smart Frame &amp; Home Assistant 허브</h1>
-      <p>상단 메뉴에서 Smart Frame 보드와 설정, 그리고 홈 어시스턴트 연동 페이지로 이동하세요. 본 화면은 향후 위젯이나 공지 영역으로 확장할 수 있습니다.</p>
-    </div>
+  <main class="main-content">
+    <section class="hero">
+      <div class="hero-card">
+        <h1>Smart Frame &amp; Home Assistant 허브</h1>
+        <p>상단 메뉴에서 Smart Frame 보드와 설정, 그리고 홈 어시스턴트 연동 페이지로 이동하세요. 아래 패널에서 오늘의 한마디와 사진을 바로 관리할 수 있습니다.</p>
+      </div>
+    </section>
+    <section class="dashboard">
+      <div class="dash-grid">
+        <article class="panel" id="verse-panel">
+          <header class="panel-header">
+            <h2>오늘의 한마디</h2>
+            <p>Smart Frame 보드에 표시될 문구를 즉시 수정하세요.</p>
+          </header>
+          <form id="verse-form">
+            <label for="verse-text">문구</label>
+            <textarea id="verse-text" placeholder="따뜻한 문장을 입력하세요"></textarea>
+            <div class="panel-actions">
+              <button type="submit" class="btn">저장</button>
+              <span class="panel-status" id="verse-status" hidden></span>
+            </div>
+          </form>
+        </article>
+        <article class="panel" id="photos-panel">
+          <header class="panel-header">
+            <h2>사진 업로드</h2>
+            <p>보드 배경으로 사용할 이미지를 업로드하거나 삭제하세요.</p>
+          </header>
+          <div class="upload-area" id="photo-dropzone">
+            <input id="photo-upload" type="file" accept="image/*" multiple/>
+            <p class="muted upload-hint">사진을 선택하거나 이 영역으로 드래그해서 추가하세요.</p>
+            <div class="input-row">
+              <button type="button" class="btn-secondary" data-action="choose-photo">사진 선택</button>
+              <button type="button" class="btn" data-action="upload-photo">업로드</button>
+            </div>
+            <div class="upload-summary" id="photo-upload-summary" hidden></div>
+          </div>
+          <div class="panel-actions">
+            <button type="button" class="btn-secondary" data-action="refresh-photos">목록 새로고침</button>
+            <span class="panel-status" id="photos-status" hidden></span>
+          </div>
+          <div class="photos-grid" id="photos-grid"></div>
+        </article>
+      </div>
+    </section>
   </main>
   <footer>© Smart Frame</footer>
+  <script>
+    const verseForm = document.getElementById('verse-form');
+    const verseInput = document.getElementById('verse-text');
+    const verseStatus = document.getElementById('verse-status');
+
+    const photoInput = document.getElementById('photo-upload');
+    const photoDropzone = document.getElementById('photo-dropzone');
+    const photoSummary = document.getElementById('photo-upload-summary');
+    const photosStatus = document.getElementById('photos-status');
+    const photosGrid = document.getElementById('photos-grid');
+
+    const uploadQueue = [];
+
+    function setPanelStatus(target, message, isError = false) {
+      const el = typeof target === 'string' ? document.getElementById(target) : target;
+      if (!el) return;
+      if (!message) {
+        el.textContent = '';
+        el.hidden = true;
+        el.classList.remove('error');
+        return;
+      }
+      el.hidden = false;
+      el.textContent = message;
+      el.classList.toggle('error', Boolean(isError));
+    }
+
+    async function loadVerse() {
+      if (!verseInput) return;
+      try {
+        const res = await fetch('/api/verse');
+        if (!res.ok) throw new Error('문구를 불러오지 못했습니다.');
+        const data = await res.json();
+        verseInput.value = data?.text || '';
+        setPanelStatus(verseStatus, '');
+      } catch (err) {
+        setPanelStatus(verseStatus, err.message || '문구를 불러오지 못했습니다.', true);
+      }
+    }
+
+    if (verseForm) {
+      verseForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!verseInput) return;
+        setPanelStatus(verseStatus, '저장 중...');
+        try {
+          const res = await fetch('/api/verse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: verseInput.value.trim() }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || body?.error) {
+            throw new Error(body?.error || '저장 실패');
+          }
+          setPanelStatus(verseStatus, '저장되었습니다.');
+        } catch (err) {
+          setPanelStatus(verseStatus, err.message || '저장 실패', true);
+        }
+      });
+    }
+
+    function isImageFile(file) {
+      if (!file) return false;
+      if (file.type && file.type.startsWith('image/')) return true;
+      const name = file.name || '';
+      return /\.(jpe?g|png|gif|webp|bmp)$/i.test(name);
+    }
+
+    function updateUploadSummary() {
+      if (!photoSummary) return;
+      photoSummary.innerHTML = '';
+      if (!uploadQueue.length) {
+        photoSummary.hidden = true;
+        return;
+      }
+      const title = document.createElement('strong');
+      title.textContent = `${uploadQueue.length}개의 파일이 대기 중입니다.`;
+      photoSummary.appendChild(title);
+      uploadQueue.slice(0, 3).forEach((file) => {
+        const row = document.createElement('div');
+        row.textContent = `• ${file.name}`;
+        photoSummary.appendChild(row);
+      });
+      if (uploadQueue.length > 3) {
+        const more = document.createElement('div');
+        more.textContent = `… 외 ${uploadQueue.length - 3}개`;
+        photoSummary.appendChild(more);
+      }
+      photoSummary.hidden = false;
+    }
+
+    function addFilesToQueue(files) {
+      if (!files || !files.length) {
+        return { added: 0, skipped: 0 };
+      }
+      let added = 0;
+      let skipped = 0;
+      files.forEach((file) => {
+        if (isImageFile(file)) {
+          uploadQueue.push(file);
+          added += 1;
+        } else {
+          skipped += 1;
+        }
+      });
+      if (added) updateUploadSummary();
+      return { added, skipped };
+    }
+
+    function handleQueueResult(result) {
+      if (!result) return;
+      const { added, skipped } = result;
+      if (!added && !skipped) return;
+      const messages = [];
+      if (added) messages.push(`${uploadQueue.length}개의 파일이 대기 중입니다.`);
+      if (skipped) messages.push(`${skipped}개의 파일은 지원되지 않는 형식입니다.`);
+      setPanelStatus(photosStatus, messages.join(' '), skipped > 0 && !added);
+      if (!added) updateUploadSummary();
+    }
+
+    function encodePhotoPath(name) {
+      return name.split('/').map(encodeURIComponent).join('/');
+    }
+
+    function renderPhotos(list) {
+      if (!photosGrid) return;
+      photosGrid.innerHTML = '';
+      if (!list.length) {
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = '등록된 사진이 없습니다.';
+        photosGrid.appendChild(empty);
+        return;
+      }
+      list.forEach((name) => {
+        const item = document.createElement('div');
+        item.className = 'photo-item';
+        const img = document.createElement('img');
+        img.src = `/photos/${encodePhotoPath(name)}`;
+        img.alt = name;
+        img.loading = 'lazy';
+        const title = document.createElement('div');
+        title.className = 'name';
+        title.textContent = name;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'btn-secondary';
+        openBtn.textContent = '보기';
+        openBtn.addEventListener('click', () => {
+          window.open(`/photos/${encodePhotoPath(name)}`, '_blank');
+        });
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.textContent = '삭제';
+        delBtn.addEventListener('click', () => deletePhoto(name));
+        actions.append(openBtn, delBtn);
+        item.append(img, title, actions);
+        photosGrid.appendChild(item);
+      });
+    }
+
+    async function loadPhotos(options) {
+      const opts = options instanceof Event ? {} : (options || {});
+      const { silent = false } = opts;
+      try {
+        const res = await fetch('/api/photos', { cache: 'no-store' });
+        if (!res.ok) throw new Error('사진 목록을 불러오지 못했습니다.');
+        const photos = await res.json();
+        renderPhotos(photos || []);
+        if (!silent) {
+          setPanelStatus(photosStatus, `${photos.length}개의 사진을 불러왔습니다.`);
+        }
+        return photos;
+      } catch (err) {
+        if (!silent) {
+          setPanelStatus(photosStatus, err.message || '사진 목록을 불러오지 못했습니다.', true);
+        }
+        return null;
+      }
+    }
+
+    async function uploadPhoto() {
+      if (photoInput && photoInput.files && photoInput.files.length) {
+        const result = addFilesToQueue(Array.from(photoInput.files));
+        handleQueueResult(result);
+        photoInput.value = '';
+      }
+      if (!uploadQueue.length) {
+        setPanelStatus(photosStatus, '업로드할 파일을 추가하세요.', true);
+        return;
+      }
+
+      const files = uploadQueue.slice();
+      uploadQueue.length = 0;
+      updateUploadSummary();
+
+      setPanelStatus(photosStatus, '업로드 중...');
+      const failures = [];
+      let successCount = 0;
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('photo', file);
+        try {
+          const res = await fetch('/api/photos/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || body?.error) {
+            throw new Error(body?.error || '업로드 실패');
+          }
+          successCount += 1;
+        } catch (err) {
+          failures.push({ file, error: err });
+        }
+      }
+
+      let message = '';
+      let isError = false;
+
+      if (failures.length) {
+        failures.forEach(({ file }) => uploadQueue.push(file));
+        updateUploadSummary();
+        const firstError = failures[0].error?.message || '업로드 실패';
+        if (!successCount) {
+          message = `모든 파일 업로드에 실패했습니다. (${firstError})`;
+          isError = true;
+        } else {
+          message = `${successCount}개 업로드 완료, ${failures.length}개 실패 (${firstError})`;
+          isError = true;
+        }
+      } else {
+        message = `${successCount}개 파일 업로드 완료!`;
+      }
+
+      if (successCount) {
+        await loadPhotos({ silent: true });
+      }
+
+      setPanelStatus(photosStatus, message, isError);
+    }
+
+    async function deletePhoto(name) {
+      if (!confirm(`${name}\n사진을 삭제하시겠습니까?`)) return;
+      setPanelStatus(photosStatus, '삭제 중...');
+      try {
+        const res = await fetch(`/api/photos/${encodePhotoPath(name)}`, { method: 'DELETE' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body?.error) {
+          throw new Error(body?.error || '삭제 실패');
+        }
+        setPanelStatus(photosStatus, '삭제되었습니다.');
+        await loadPhotos({ silent: true });
+      } catch (err) {
+        setPanelStatus(photosStatus, err.message || '삭제 실패', true);
+      }
+    }
+
+    if (photoInput) {
+      photoInput.multiple = true;
+      photoInput.addEventListener('change', (event) => {
+        const files = Array.from(event.target.files || []);
+        const result = addFilesToQueue(files);
+        handleQueueResult(result);
+        photoInput.value = '';
+      });
+    }
+
+    const chooseButton = document.querySelector('[data-action="choose-photo"]');
+    if (chooseButton && photoInput) {
+      chooseButton.addEventListener('click', () => photoInput.click());
+    }
+
+    const uploadButton = document.querySelector('[data-action="upload-photo"]');
+    if (uploadButton) {
+      uploadButton.addEventListener('click', uploadPhoto);
+    }
+
+    const refreshButton = document.querySelector('[data-action="refresh-photos"]');
+    if (refreshButton) {
+      refreshButton.addEventListener('click', () => loadPhotos({ silent: false }));
+    }
+
+    if (photoDropzone) {
+      let dragCounter = 0;
+      photoDropzone.addEventListener('dragenter', (event) => {
+        event.preventDefault();
+        dragCounter += 1;
+        photoDropzone.classList.add('dragover');
+      });
+      photoDropzone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = 'copy';
+        }
+      });
+      photoDropzone.addEventListener('dragleave', () => {
+        dragCounter = Math.max(0, dragCounter - 1);
+        if (dragCounter === 0) {
+          photoDropzone.classList.remove('dragover');
+        }
+      });
+      photoDropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dragCounter = 0;
+        photoDropzone.classList.remove('dragover');
+        const files = Array.from(event.dataTransfer?.files || []);
+        const result = addFilesToQueue(files);
+        handleQueueResult(result);
+      });
+      photoDropzone.addEventListener('click', (event) => {
+        if (event.target === photoDropzone || event.target.classList.contains('upload-hint')) {
+          photoInput?.click();
+        }
+      });
+    }
+
+    window.addEventListener('dragover', (event) => {
+      if (!photoDropzone) return;
+      if (!photoDropzone.contains(event.target)) {
+        event.preventDefault();
+      }
+    });
+
+    window.addEventListener('drop', (event) => {
+      if (!photoDropzone) return;
+      if (!photoDropzone.contains(event.target)) {
+        event.preventDefault();
+      }
+    });
+
+    loadVerse();
+    loadPhotos({ silent: false });
+  </script>
 </body>
 </html>
