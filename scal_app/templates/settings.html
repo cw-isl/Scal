@@ -314,84 +314,6 @@
     padding:6px 10px;
     border-radius:8px;
   }
-  .upload-area {
-    border:2px dashed rgba(75,107,255,0.25);
-    border-radius:14px;
-    padding:16px;
-    background:#f8f9ff;
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-    transition:border-color .2s ease, background .2s ease, box-shadow .2s ease;
-  }
-  .upload-area.dragover {
-    border-color:#4b6bff;
-    background:rgba(75,107,255,0.08);
-    box-shadow:0 12px 24px rgba(75,107,255,0.18);
-  }
-  .upload-area .input-row {
-    align-items:stretch;
-    justify-content:flex-start;
-  }
-  .upload-area input[type="file"] {
-    display:none;
-  }
-  .upload-area .btn-secondary {
-    background:#eef1ff;
-    color:#2a3570;
-  }
-  .upload-area .btn-secondary:hover {
-    background:#dbe1ff;
-  }
-  .upload-area .upload-hint {
-    margin:0;
-  }
-  .upload-summary {
-    font-size:13px;
-    color:#2d3a6b;
-    background:#eef1ff;
-    border-radius:12px;
-    padding:10px 12px;
-    line-height:1.4;
-  }
-  .upload-summary strong {
-    display:block;
-    margin-bottom:4px;
-  }
-  .photos-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(160px,1fr));
-    gap:12px;
-  }
-  .photo-item {
-    background:#f6f7fb;
-    border-radius:12px;
-    padding:10px;
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    align-items:stretch;
-  }
-  .photo-item img {
-    width:100%;
-    height:120px;
-    object-fit:cover;
-    border-radius:8px;
-  }
-  .photo-item .name {
-    font-size:13px;
-    color:#333;
-    word-break:break-all;
-  }
-  .photo-item .actions {
-    display:flex;
-    gap:8px;
-  }
-  .photo-item .actions button {
-    flex:1 1 auto;
-    padding:8px;
-    font-size:13px;
-  }
   footer {
     text-align:center;
     font-size:12px;
@@ -513,6 +435,46 @@
               <p class="muted">서비스키와 도시 코드를 입력한 뒤 정류소명을 검색하면 node ID를 선택할 수 있습니다.</p>
             </div>
             <div class="bus-results" id="bus-results" hidden></div>
+            <div class="actions">
+              <button type="submit">저장</button>
+              <span class="status" hidden></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="calendar-card">
+          <h2>캘린더</h2>
+          <form data-section="frame">
+            <div class="field">
+              <label>iCal 주소</label>
+              <div class="calendar-rows">
+                <div class="calendar-row" data-index="1">
+                  <span class="row-label">캘린더 1</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="https://example.com/calendar.ics"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+                <div class="calendar-row" data-index="2">
+                  <span class="row-label">캘린더 2</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+                <div class="calendar-row" data-index="3">
+                  <span class="row-label">캘린더 3</span>
+                  <div class="input-row">
+                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
+                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
+                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
+                  </div>
+                </div>
+              </div>
+              <p class="muted">최대 3개의 캘린더를 추가할 수 있습니다. 각 캘린더는 선택한 색상으로 보드에 표시됩니다.</p>
+            </div>
             <div class="actions">
               <button type="submit">저장</button>
               <span class="status" hidden></span>
@@ -715,91 +677,6 @@
       </div>
     </section>
 
-    <section class="group" id="contents-settings">
-      <div class="group-title">
-        <h2>콘텐츠 설정</h2>
-        <p>오늘의 한마디와 사진, 달력 정보를 채워 Smart Frame 화면을 풍성하게 만드세요.</p>
-      </div>
-      <div class="cards">
-        <section class="card" id="calendar-card">
-          <h2>캘린더</h2>
-          <form data-section="frame">
-            <div class="field">
-              <label>iCal 주소</label>
-              <div class="calendar-rows">
-                <div class="calendar-row" data-index="1">
-                  <span class="row-label">캘린더 1</span>
-                  <div class="input-row">
-                    <input type="url" data-role="calendar-url" placeholder="https://example.com/calendar.ics"/>
-                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-                  </div>
-                </div>
-                <div class="calendar-row" data-index="2">
-                  <span class="row-label">캘린더 2</span>
-                  <div class="input-row">
-                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
-                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-                  </div>
-                </div>
-                <div class="calendar-row" data-index="3">
-                  <span class="row-label">캘린더 3</span>
-                  <div class="input-row">
-                    <input type="url" data-role="calendar-url" placeholder="추가 캘린더 주소"/>
-                    <input type="color" class="color-input" data-role="calendar-color" value="#4b6bff" aria-label="캘린더 색상"/>
-                    <button type="button" class="color-chip" title="색상 선택" aria-label="색상 선택"><span class="chip-icon">🎨</span></button>
-                  </div>
-                </div>
-              </div>
-              <p class="muted">최대 3개의 캘린더를 추가할 수 있습니다. 각 캘린더는 선택한 색상으로 보드에 표시됩니다.</p>
-            </div>
-            <div class="actions">
-              <button type="submit">저장</button>
-              <span class="status" hidden></span>
-            </div>
-          </form>
-        </section>
-
-        <section class="card" id="verse-card">
-          <h2>오늘의 한마디</h2>
-          <form data-section="verse">
-            <div class="field">
-              <label for="verse-text">문구</label>
-              <div class="input-row">
-                <textarea id="verse-text" name="text" placeholder="따뜻한 문장을 입력하세요"></textarea>
-              </div>
-            </div>
-            <div class="actions">
-              <button type="submit">저장</button>
-              <span class="status" hidden></span>
-            </div>
-          </form>
-        </section>
-
-        <section class="card" id="photos-card">
-          <h2>사진 관리</h2>
-          <div class="field">
-            <label for="photo-upload">사진 업로드</label>
-            <div class="upload-area" id="photo-dropzone">
-              <input id="photo-upload" type="file" accept="image/*" multiple/>
-              <div class="input-row">
-                <button type="button" class="btn-secondary" data-action="choose-photo">사진 선택</button>
-                <button type="button" class="btn" data-action="upload-photo">업로드</button>
-              </div>
-              <p class="muted upload-hint">사진을 선택하거나 이 영역으로 드래그해서 추가하세요.</p>
-              <div class="upload-summary" id="photo-upload-summary" hidden></div>
-            </div>
-            <p class="muted">JPG, PNG, WEBP, GIF 파일을 업로드하면 보드 배경으로 자동 교체됩니다.</p>
-          </div>
-          <div class="photos-grid" id="photos-grid"></div>
-          <div class="actions">
-            <button type="button" class="btn-secondary" data-action="refresh-photos">목록 새로고침</button>
-            <span class="status" hidden></span>
-          </div>
-        </section>
-      </div>
-    </section>
   </div>
   </div>
   <footer>© Smart Frame</footer>
@@ -810,71 +687,8 @@ const state = {
   layoutDefaults: {},
 };
 
-const uploadQueue = [];
-const photoInput = document.getElementById('photo-upload');
-const photoDropzone = document.getElementById('photo-dropzone');
-const uploadSummary = document.getElementById('photo-upload-summary');
 const layoutInputs = Array.from(document.querySelectorAll('[data-layout-input]'));
 const layoutResetButton = document.querySelector('[data-action="layout-reset"]');
-
-function isImageFile(file) {
-  if (!file) return false;
-  if (file.type && file.type.startsWith('image/')) return true;
-  const name = file.name || '';
-  return /\.(jpe?g|png|gif|webp|bmp)$/i.test(name);
-}
-
-function updateUploadSummary() {
-  if (!uploadSummary) return;
-  uploadSummary.innerHTML = '';
-  if (!uploadQueue.length) {
-    uploadSummary.hidden = true;
-    return;
-  }
-  const title = document.createElement('strong');
-  title.textContent = `${uploadQueue.length}개의 파일이 대기 중입니다.`;
-  uploadSummary.appendChild(title);
-  uploadQueue.slice(0, 3).forEach((file) => {
-    const row = document.createElement('div');
-    row.textContent = `• ${file.name}`;
-    uploadSummary.appendChild(row);
-  });
-  if (uploadQueue.length > 3) {
-    const more = document.createElement('div');
-    more.textContent = `… 외 ${uploadQueue.length - 3}개`;
-    uploadSummary.appendChild(more);
-  }
-  uploadSummary.hidden = false;
-}
-
-function addFilesToQueue(files) {
-  if (!files || !files.length) {
-    return { added: 0, skipped: 0 };
-  }
-  let added = 0;
-  let skipped = 0;
-  files.forEach((file) => {
-    if (isImageFile(file)) {
-      uploadQueue.push(file);
-      added += 1;
-    } else {
-      skipped += 1;
-    }
-  });
-  if (added) updateUploadSummary();
-  return { added, skipped };
-}
-
-function handleQueueResult(result) {
-  if (!result) return;
-  const { added, skipped } = result;
-  if (!added && !skipped) return;
-  const messages = [];
-  if (added) messages.push(`${uploadQueue.length}개의 파일이 대기 중입니다.`);
-  if (skipped) messages.push(`${skipped}개의 파일은 지원되지 않는 형식입니다.`);
-  setStatus('#photos-card', messages.join(' '), skipped > 0 && !added);
-  if (!added) updateUploadSummary();
-}
 
 const CAL_DEFAULT_COLOR = '#4b6bff';
 const calendarRows = Array.from(document.querySelectorAll('#calendar-card .calendar-row'));
@@ -916,10 +730,6 @@ calendarRows.forEach((row) => {
     });
   }
 });
-
-function encodePhotoPath(name) {
-  return name.split('/').map(encodeURIComponent).join('/');
-}
 
 function setStatus(section, message, isError=false) {
   const card = document.querySelector(section);
@@ -1028,7 +838,7 @@ function resetLayoutToDefaults() {
 
 function fillFields() {
   if (!state.config) return;
-  const { frame, home_assistant, bus, weather, telegram, verse, todoist } = state.config;
+  const { frame, home_assistant, bus, weather, telegram, todoist } = state.config;
   const setValue = (id, value='') => {
     const el = document.getElementById(id);
     if (el) el.value = value || '';
@@ -1060,9 +870,6 @@ function fillFields() {
     setValue('todoist-token', todoist.api_token);
     setValue('todoist-project', todoist.project_id);
   }
-  if (verse) {
-    setValue('verse-text', verse.text);
-  }
 }
 
 function gatherFormData(form) {
@@ -1077,21 +884,6 @@ function gatherFormData(form) {
 async function submitSection(form) {
   const section = form.dataset.section;
   const payload = {};
-  if (section === 'verse') {
-    const data = gatherFormData(form);
-    try {
-      const res = await fetch('/api/verse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.text || '' })
-      });
-      if (!res.ok) throw new Error((await res.json()).error || '저장 실패');
-      setStatus('#verse-card', '저장되었습니다.');
-    } catch (err) {
-      setStatus('#verse-card', err.message || '저장 실패', true);
-    }
-    return;
-  }
   if (section === 'frame') {
     const rows = Array.from(form.querySelectorAll('.calendar-row'));
     const calendars = rows
@@ -1224,207 +1016,9 @@ function renderBusResults(results) {
   wrap.hidden = false;
 }
 
-async function loadPhotos(options) {
-  const opts = options instanceof Event ? {} : (options || {});
-  const { silent = false } = opts;
-  try {
-    const res = await fetch('/api/photos');
-    if (!res.ok) throw new Error('목록을 불러오지 못했습니다.');
-    const photos = await res.json();
-    renderPhotos(photos || []);
-    if (!silent) {
-      setStatus('#photos-card', `${photos.length}개의 사진`, false);
-    }
-    return photos;
-  } catch (err) {
-    if (!silent) {
-      setStatus('#photos-card', err.message || '사진 목록을 불러오지 못했습니다.', true);
-    }
-    return null;
-  }
-}
-
-function renderPhotos(list) {
-  const grid = document.getElementById('photos-grid');
-  grid.innerHTML = '';
-  if (!list.length) {
-    grid.innerHTML = '<p class="muted">등록된 사진이 없습니다.</p>';
-    return;
-  }
-  list.forEach((name) => {
-    const item = document.createElement('div');
-    item.className = 'photo-item';
-    const img = document.createElement('img');
-    img.src = `/photos/${encodePhotoPath(name)}`;
-    img.alt = name;
-    img.loading = 'lazy';
-    const title = document.createElement('div');
-    title.className = 'name';
-    title.textContent = name;
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = 'btn-secondary';
-    openBtn.textContent = '보기';
-    openBtn.addEventListener('click', () => {
-      window.open(`/photos/${encodePhotoPath(name)}`, '_blank');
-    });
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.textContent = '삭제';
-    delBtn.addEventListener('click', () => deletePhoto(name));
-    actions.append(openBtn, delBtn);
-    item.append(img, title, actions);
-    grid.appendChild(item);
-  });
-}
-
-async function uploadPhoto() {
-  if (photoInput && photoInput.files && photoInput.files.length) {
-    const result = addFilesToQueue(Array.from(photoInput.files));
-    handleQueueResult(result);
-    photoInput.value = '';
-  }
-  if (!uploadQueue.length) {
-    setStatus('#photos-card', '업로드할 파일을 추가하세요.', true);
-    return;
-  }
-
-  const files = uploadQueue.slice();
-  uploadQueue.length = 0;
-  updateUploadSummary();
-
-  setStatus('#photos-card', '업로드 중...');
-  const failures = [];
-  let successCount = 0;
-
-  for (const file of files) {
-    const formData = new FormData();
-    formData.append('photo', file);
-    try {
-      const res = await fetch('/api/photos/upload', {
-        method: 'POST',
-        body: formData
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || body?.error) {
-        throw new Error(body?.error || '업로드 실패');
-      }
-      successCount += 1;
-    } catch (err) {
-      failures.push({ file, error: err });
-    }
-  }
-
-  let message = '';
-  let isError = false;
-
-  if (failures.length) {
-    failures.forEach(({ file }) => uploadQueue.push(file));
-    updateUploadSummary();
-    const firstError = failures[0].error?.message || '업로드 실패';
-    if (!successCount) {
-      message = `모든 파일 업로드에 실패했습니다. (${firstError})`;
-      isError = true;
-    } else {
-      message = `${successCount}개 업로드 완료, ${failures.length}개 실패 (${firstError})`;
-      isError = true;
-    }
-  } else {
-    message = `${successCount}개 파일 업로드 완료!`;
-  }
-
-  if (successCount) {
-    await loadPhotos({ silent: true });
-  }
-
-  setStatus('#photos-card', message, isError);
-}
-
-async function deletePhoto(name) {
-  if (!confirm(`${name}\n사진을 삭제하시겠습니까?`)) return;
-  setStatus('#photos-card', '삭제 중...');
-  try {
-    const res = await fetch(`/api/photos/${encodePhotoPath(name)}`, { method: 'DELETE' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || '삭제 실패');
-    setStatus('#photos-card', '삭제되었습니다.');
-    await loadPhotos();
-  } catch (err) {
-    setStatus('#photos-card', err.message || '삭제 실패', true);
-  }
-}
-
-if (photoInput) {
-  photoInput.multiple = true;
-  photoInput.addEventListener('change', (event) => {
-    const files = Array.from(event.target.files || []);
-    const result = addFilesToQueue(files);
-    handleQueueResult(result);
-    photoInput.value = '';
-  });
-}
-
-const chooseButton = document.querySelector('[data-action="choose-photo"]');
-if (chooseButton && photoInput) {
-  chooseButton.addEventListener('click', () => photoInput.click());
-}
-
-if (photoDropzone) {
-  let dragCounter = 0;
-  photoDropzone.addEventListener('dragenter', (event) => {
-    event.preventDefault();
-    dragCounter += 1;
-    photoDropzone.classList.add('dragover');
-  });
-  photoDropzone.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  });
-  photoDropzone.addEventListener('dragleave', (event) => {
-    dragCounter = Math.max(0, dragCounter - 1);
-    if (dragCounter === 0) {
-      photoDropzone.classList.remove('dragover');
-    }
-  });
-  photoDropzone.addEventListener('drop', (event) => {
-    event.preventDefault();
-    dragCounter = 0;
-    photoDropzone.classList.remove('dragover');
-    const files = Array.from(event.dataTransfer?.files || []);
-    const result = addFilesToQueue(files);
-    handleQueueResult(result);
-  });
-  photoDropzone.addEventListener('click', (event) => {
-    if (event.target === photoDropzone || event.target.classList.contains('upload-hint')) {
-      photoInput?.click();
-    }
-  });
-}
-
-window.addEventListener('dragover', (event) => {
-  if (!photoDropzone) return;
-  if (!photoDropzone.contains(event.target)) {
-    event.preventDefault();
-  }
-});
-
-window.addEventListener('drop', (event) => {
-  if (!photoDropzone) return;
-  if (!photoDropzone.contains(event.target)) {
-    event.preventDefault();
-  }
-});
-
 document.querySelector('[data-action="bus-search"]').addEventListener('click', searchBusStops);
-document.querySelector('[data-action="upload-photo"]').addEventListener('click', uploadPhoto);
-document.querySelector('[data-action="refresh-photos"]').addEventListener('click', loadPhotos);
 
 loadConfig();
-loadPhotos();
 </script>
 </body>
 </html>
