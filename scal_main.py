@@ -73,31 +73,63 @@ def _save_pil_image(img: Image.Image, dest: Path, img_format: str) -> None:
     img.save(dest, **save_kwargs)
 
 
-def _resize_to_frame_height(img: Image.Image) -> Image.Image:
+FRAME_CANVAS_WIDTH = 1080
+FRAME_CANVAS_HEIGHT = 1920
+
+
+def _frame_canvas_mode_and_fill(img: Image.Image) -> tuple[str, Any]:
+    mode = img.mode or "RGB"
+    if mode == "RGBA":
+        return "RGBA", (0, 0, 0, 0)
+    if mode == "LA":
+        return "LA", (0, 0)
+    if mode == "L":
+        return "L", 0
+    if mode == "P":
+        if "transparency" in getattr(img, "info", {}):
+            return "RGBA", (0, 0, 0, 0)
+        return "RGB", (0, 0, 0)
+    return "RGB", (0, 0, 0)
+
+
+def _fit_image_for_frame(img: Image.Image) -> Image.Image:
     width, height = img.size
-    if height <= 0:
+    if width <= 0 or height <= 0:
         return img
-    if height > 1080:
-        scale = 1080.0 / float(height)
-        new_width = max(1, int(round(width * scale)))
-        new_size = (new_width, 1080)
-        if (width, height) != new_size:
-            img = img.resize(new_size, _pil_resample_lanczos())
-    return img
+
+    scale = min(
+        1.0,
+        FRAME_CANVAS_WIDTH / float(width),
+        FRAME_CANVAS_HEIGHT / float(height),
+    )
+
+    new_width = max(1, int(round(width * scale)))
+    new_height = max(1, int(round(height * scale)))
+    if (new_width, new_height) != (width, height):
+        img = img.resize((new_width, new_height), _pil_resample_lanczos())
+        width, height = img.size
+
+    if width == FRAME_CANVAS_WIDTH and height == FRAME_CANVAS_HEIGHT:
+        return img
+
+    canvas_mode, fill = _frame_canvas_mode_and_fill(img)
+    canvas = Image.new(canvas_mode, (FRAME_CANVAS_WIDTH, FRAME_CANVAS_HEIGHT), fill)
+    paste_img = img if img.mode == canvas_mode else img.convert(canvas_mode)
+    offset_x = (FRAME_CANVAS_WIDTH - width) // 2
+    offset_y = (FRAME_CANVAS_HEIGHT - height) // 2
+    canvas.paste(paste_img, (offset_x, offset_y))
+    return canvas
 
 
 def process_uploaded_photo(dest: Path) -> None:
-    """Rotate & resize landscape photos for the vertical frame layout."""
+    """Rotate uploads 90° CCW and letterbox them for the frame canvas."""
     if not dest.exists():
         return
     with Image.open(dest) as img:
         original_format = img.format or dest.suffix.lstrip(".")
         img = ImageOps.exif_transpose(img)
-        width, height = img.size
-        is_landscape = width > height
-        if is_landscape:
-            img = img.rotate(90, expand=True)
-        img = _resize_to_frame_height(img)
+        img = img.rotate(90, expand=True)
+        img = _fit_image_for_frame(img)
         _save_pil_image(img, dest, original_format)
 
 
@@ -111,7 +143,7 @@ def rotate_photo_file(dest: Path, angle: int) -> int:
         img = ImageOps.exif_transpose(img)
         if normalized:
             img = img.rotate(normalized, expand=True)
-        img = _resize_to_frame_height(img)
+        img = _fit_image_for_frame(img)
         _save_pil_image(img, dest, original_format)
     return normalized
 
