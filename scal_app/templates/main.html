@@ -296,10 +296,11 @@
   }
   .photo-item .actions {
     display:flex;
+    flex-wrap:wrap;
     gap:8px;
   }
   .photo-item .actions button {
-    flex:1 1 auto;
+    flex:1 1 calc(50% - 4px);
     padding:8px 10px;
     font-size:13px;
   }
@@ -769,11 +770,21 @@
         openBtn.addEventListener('click', () => {
           window.open(`/photos/${encodePhotoPath(name)}`, '_blank');
         });
+        const rotateBtn = document.createElement('button');
+        rotateBtn.type = 'button';
+        rotateBtn.className = 'btn-secondary';
+        rotateBtn.textContent = '회전';
+        rotateBtn.addEventListener('click', () => rotatePhoto(name));
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn-secondary';
+        saveBtn.textContent = '저장';
+        saveBtn.addEventListener('click', () => savePhoto(name));
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.textContent = '삭제';
         delBtn.addEventListener('click', () => deletePhoto(name));
-        actions.append(openBtn, delBtn);
+        actions.append(openBtn, rotateBtn, saveBtn, delBtn);
         item.append(img, title, actions);
         photosGrid.appendChild(item);
       });
@@ -859,6 +870,59 @@
       }
 
       setPanelStatus(photosStatus, message, isError);
+    }
+
+    function savePhoto(name) {
+      const url = `/photos/${encodePhotoPath(name)}`;
+      const link = document.createElement('a');
+      link.href = url;
+      const baseName = name.split('/').pop() || 'photo';
+      link.download = baseName;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      requestAnimationFrame(() => {
+        document.body.removeChild(link);
+      });
+    }
+
+    async function rotatePhoto(name, options = {}) {
+      const direction = options.direction || 'clockwise';
+      setPanelStatus(photosStatus, '회전 중...');
+      try {
+        const res = await fetch(`/api/photos/${encodePhotoPath(name)}/rotate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ direction }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body?.error) {
+          throw new Error(body?.error || '회전 실패');
+        }
+        await loadPhotos({ silent: true });
+        let message = '사진을 회전했습니다.';
+        if (typeof body?.angle === 'number') {
+          const rawAngle = body.angle;
+          const remainder = rawAngle % 360;
+          const magnitude = Math.abs(remainder) || (rawAngle !== 0 ? 360 : 0);
+          if (magnitude) {
+            if (magnitude === 180) {
+              message = '사진을 180° 회전했습니다.';
+            } else if (rawAngle < 0) {
+              message = `사진을 시계 방향으로 ${magnitude}° 회전했습니다.`;
+            } else {
+              message = `사진을 반시계 방향으로 ${magnitude}° 회전했습니다.`;
+            }
+          } else {
+            message = '사진 방향을 유지했습니다.';
+          }
+        } else if (typeof body?.normalized_angle === 'number' && body.normalized_angle) {
+          message = `사진을 ${body.normalized_angle}° 회전했습니다.`;
+        }
+        setPanelStatus(photosStatus, message);
+      } catch (err) {
+        setPanelStatus(photosStatus, err.message || '회전 실패', true);
+      }
     }
 
     async function deletePhoto(name) {

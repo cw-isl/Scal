@@ -73,6 +73,19 @@ def _save_pil_image(img: Image.Image, dest: Path, img_format: str) -> None:
     img.save(dest, **save_kwargs)
 
 
+def _resize_to_frame_height(img: Image.Image) -> Image.Image:
+    width, height = img.size
+    if height <= 0:
+        return img
+    if height > 1080:
+        scale = 1080.0 / float(height)
+        new_width = max(1, int(round(width * scale)))
+        new_size = (new_width, 1080)
+        if (width, height) != new_size:
+            img = img.resize(new_size, _pil_resample_lanczos())
+    return img
+
+
 def process_uploaded_photo(dest: Path) -> None:
     """Rotate & resize landscape photos for the vertical frame layout."""
     if not dest.exists():
@@ -84,16 +97,23 @@ def process_uploaded_photo(dest: Path) -> None:
         is_landscape = width > height
         if is_landscape:
             img = img.rotate(90, expand=True)
-            width, height = img.size
-            if height <= 0:
-                _save_pil_image(img, dest, original_format)
-                return
-            scale = 1080.0 / float(height)
-            new_width = max(1, int(round(width * scale)))
-            new_size = (new_width, 1080)
-            if (width, height) != new_size:
-                img = img.resize(new_size, _pil_resample_lanczos())
+        img = _resize_to_frame_height(img)
         _save_pil_image(img, dest, original_format)
+
+
+def rotate_photo_file(dest: Path, angle: int) -> int:
+    """Rotate photo file by multiples of 90 degrees and keep frame sizing."""
+    if not dest.exists():
+        raise FileNotFoundError(dest)
+    normalized = angle % 360
+    with Image.open(dest) as img:
+        original_format = img.format or dest.suffix.lstrip(".")
+        img = ImageOps.exif_transpose(img)
+        if normalized:
+            img = img.rotate(normalized, expand=True)
+        img = _resize_to_frame_height(img)
+        _save_pil_image(img, dest, original_format)
+    return normalized
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
 _ical_cache: Dict[str, Dict[str, Any]] = {}
@@ -1011,6 +1031,53 @@ def api_photos_upload():
             pass
         return jsonify({"error": f"업로드 실패: {exc}"}), 500
     return jsonify({"success": True, "filename": new_name})
+
+
+@app.post("/api/photos/<path:fname>/rotate")
+def api_rotate_photo(fname: str):
+    target = PHOTOS_DIR / fname
+    if not _is_safe_photo_path(target):
+        return jsonify({"error": "잘못된 경로입니다."}), 400
+    if not target.exists():
+        return jsonify({"error": "파일을 찾을 수 없습니다."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    direction = str(payload.get("direction") or payload.get("dir") or "").strip().lower()
+    angle_value = payload.get("angle")
+    steps_value = payload.get("steps")
+
+    angle: Optional[int] = None
+    if angle_value is not None:
+        try:
+            angle = int(angle_value)
+        except (TypeError, ValueError):
+            return jsonify({"error": "회전 각도는 숫자여야 합니다."}), 400
+    elif steps_value is not None:
+        try:
+            angle = int(steps_value) * 90
+        except (TypeError, ValueError):
+            return jsonify({"error": "회전 단계는 숫자여야 합니다."}), 400
+    elif direction:
+        if direction in {"clockwise", "cw", "right"}:
+            angle = -90
+        elif direction in {"counterclockwise", "ccw", "left"}:
+            angle = 90
+        elif direction in {"flip", "half", "180"}:
+            angle = 180
+    if angle is None:
+        angle = -90  # default: rotate clockwise
+
+    if angle % 90 != 0:
+        return jsonify({"error": "회전은 90도 단위로만 가능합니다."}), 400
+
+    try:
+        normalized = rotate_photo_file(target, angle)
+    except FileNotFoundError:
+        return jsonify({"error": "파일을 찾을 수 없습니다."}), 404
+    except Exception as exc:
+        return jsonify({"error": f"회전에 실패했습니다: {exc}"}), 500
+
+    return jsonify({"success": True, "angle": angle, "normalized_angle": normalized})
 
 
 @app.delete("/api/photos/<path:fname>")
