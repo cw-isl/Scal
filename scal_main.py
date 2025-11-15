@@ -18,6 +18,7 @@ import requests
 import html
 import logging
 from flask import Flask, request, jsonify, render_template_string, abort, send_from_directory
+from PIL import Image, ImageOps
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 logging.basicConfig(
@@ -44,6 +45,55 @@ from scal_app.config import (
 from scal_app.services.weather import fetch_weather, fetch_air_quality
 from scal_app.services.bus import get_bus_arrivals, render_bus_box, pick_text
 from scal_app.templates import load_board_html, load_settings_html, load_main_html
+
+# === [SECTION: Photo processing helpers] =====================================
+
+def _pil_resample_lanczos():
+    """Return the best available LANCZOS resampling filter."""
+    resampling = getattr(Image, "Resampling", None)
+    if resampling is not None and hasattr(resampling, "LANCZOS"):
+        return resampling.LANCZOS
+    return getattr(Image, "LANCZOS")
+
+
+def _normalize_format(fmt: str) -> str:
+    fmt = (fmt or "").strip().upper()
+    if fmt == "JPG":
+        return "JPEG"
+    return fmt
+
+
+def _save_pil_image(img: Image.Image, dest: Path, img_format: str) -> None:
+    fmt = _normalize_format(img_format or dest.suffix.lstrip("."))
+    save_kwargs = {}
+    if fmt:
+        save_kwargs["format"] = fmt
+        if fmt == "JPEG" and img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+    img.save(dest, **save_kwargs)
+
+
+def process_uploaded_photo(dest: Path) -> None:
+    """Rotate & resize landscape photos for the vertical frame layout."""
+    if not dest.exists():
+        return
+    with Image.open(dest) as img:
+        original_format = img.format or dest.suffix.lstrip(".")
+        img = ImageOps.exif_transpose(img)
+        width, height = img.size
+        is_landscape = width > height
+        if is_landscape:
+            img = img.rotate(90, expand=True)
+            width, height = img.size
+            if height <= 0:
+                _save_pil_image(img, dest, original_format)
+                return
+            scale = 1080.0 / float(height)
+            new_width = max(1, int(round(width * scale)))
+            new_size = (new_width, 1080)
+            if (width, height) != new_size:
+                img = img.resize(new_size, _pil_resample_lanczos())
+        _save_pil_image(img, dest, original_format)
 
 # === [SECTION: iCal loader (with basic fallback parser)] =====================
 _ical_cache: Dict[str, Dict[str, Any]] = {}
@@ -953,7 +1003,12 @@ def api_photos_upload():
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         file.save(dest)
+        process_uploaded_photo(dest)
     except Exception as exc:
+        try:
+            dest.unlink()
+        except Exception:
+            pass
         return jsonify({"error": f"업로드 실패: {exc}"}), 500
     return jsonify({"success": True, "filename": new_name})
 

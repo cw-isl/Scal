@@ -4,3 +4,4 @@ requests>=2.31
 PyYAML>=6.0
 ics>=0.7
 gunicorn>=21.2
+Pillow>=10.0
