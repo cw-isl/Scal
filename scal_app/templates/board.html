@@ -57,8 +57,9 @@
   }
   .bg.bg-portrait,
   .bg2.bg-portrait {
-    object-fit: cover;
-    background-size: cover;
+    /* Keep the entire rotated photo visible without cropping */
+    object-fit: contain;
+    background-size: contain;
   }
   .bg2 { opacity: 0; }
 
