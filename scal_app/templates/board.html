@@ -20,17 +20,16 @@
   /* Background photo crossfade */
   .bg, .bg2 {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 0;
+    left: 0;
     z-index: -1;
     width: var(--W);
     height: var(--H);
     max-width: var(--W);
     max-height: var(--H);
-    transform: translate(-50%, -50%);
-    object-fit: contain;
+    object-fit: cover;
     object-position: var(--bg-pos-x) var(--bg-pos-y);
-    background-size: contain;
+    background-size: cover;
     background-position: var(--bg-pos-x) var(--bg-pos-y);
     background-repeat: no-repeat;
     background-color:#000;
