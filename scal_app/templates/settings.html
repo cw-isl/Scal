@@ -209,6 +209,18 @@
     grid-template-columns:repeat(auto-fit, minmax(180px,1fr));
     gap:12px;
   }
+  .layout-field.layout-field-slider .layout-slider-control {
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .layout-slider-control input[type="range"] {
+    flex:1 1 auto;
+    accent-color:#4b6bff;
+  }
+  .layout-slider-control input[type="number"] {
+    width:80px;
+  }
   .layout-field {
     display:flex;
     flex-direction:column;
@@ -527,13 +539,19 @@
                     <label for="layout-portrait-weather">날씨 영역 높이 (px)</label>
                     <input id="layout-portrait-weather" type="number" min="200" max="640" data-layout-input data-orientation="portrait" data-key="weather" placeholder="320"/>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-portrait-bg-x">배경 가로 위치 (%)</label>
-                    <input id="layout-portrait-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_x" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-portrait-bg-x" data-default-value="50"/>
+                      <input id="layout-portrait-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_x" placeholder="50"/>
+                    </div>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-portrait-bg-y">배경 세로 위치 (%)</label>
-                    <input id="layout-portrait-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_y" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-portrait-bg-y" data-default-value="50"/>
+                      <input id="layout-portrait-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="portrait" data-key="bg_pos_y" placeholder="50"/>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -568,13 +586,19 @@
                     <label for="layout-right-weather">날씨 영역 높이 (px)</label>
                     <input id="layout-right-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_right" data-key="weather" placeholder="320"/>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-right-bg-x">배경 가로 위치 (%)</label>
-                    <input id="layout-right-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_x" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-right-bg-x" data-default-value="50"/>
+                      <input id="layout-right-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_x" placeholder="50"/>
+                    </div>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-right-bg-y">배경 세로 위치 (%)</label>
-                    <input id="layout-right-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_y" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-right-bg-y" data-default-value="50"/>
+                      <input id="layout-right-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_right" data-key="bg_pos_y" placeholder="50"/>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -609,13 +633,19 @@
                     <label for="layout-left-weather">날씨 영역 높이 (px)</label>
                     <input id="layout-left-weather" type="number" min="200" max="640" data-layout-input data-orientation="landscape_left" data-key="weather" placeholder="320"/>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-left-bg-x">배경 가로 위치 (%)</label>
-                    <input id="layout-left-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_x" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-left-bg-x" data-default-value="50"/>
+                      <input id="layout-left-bg-x" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_x" placeholder="50"/>
+                    </div>
                   </div>
-                  <div class="layout-field">
+                  <div class="layout-field layout-field-slider">
                     <label for="layout-left-bg-y">배경 세로 위치 (%)</label>
-                    <input id="layout-left-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_y" placeholder="50"/>
+                    <div class="layout-slider-control">
+                      <input type="range" min="0" max="100" step="1" value="50" data-layout-slider data-target="layout-left-bg-y" data-default-value="50"/>
+                      <input id="layout-left-bg-y" type="number" min="0" max="100" step="1" data-layout-input data-orientation="landscape_left" data-key="bg_pos_y" placeholder="50"/>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -641,7 +671,89 @@ const state = {
 };
 
 const layoutInputs = Array.from(document.querySelectorAll('[data-layout-input]'));
+const layoutSliders = Array.from(document.querySelectorAll('[data-layout-slider]'));
 const layoutResetButton = document.querySelector('[data-action="layout-reset"]');
+const sliderLinkMap = new Map();
+
+function clampBgPosition(value) {
+  if (!Number.isFinite(value)) return null;
+  if (value < 0) return 0;
+  if (value > 100) return 100;
+  return Math.round(value);
+}
+
+function parseBgPosition(raw) {
+  if (raw === undefined || raw === null) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  return clampBgPosition(Number(text));
+}
+
+function getSliderFallback(input, slider) {
+  const attr = slider?.dataset?.defaultValue;
+  const placeholder = input?.placeholder;
+  const options = [attr, placeholder, slider?.min, 50];
+  for (const candidate of options) {
+    const parsed = parseBgPosition(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+  return 50;
+}
+
+function syncSliderToInput(input, allowFallback = true) {
+  const slider = sliderLinkMap.get(input);
+  if (!slider) return;
+  const parsed = parseBgPosition(input.value);
+  let value = parsed;
+  if (value === null && allowFallback) {
+    value = getSliderFallback(input, slider);
+  }
+  if (value === null) return;
+  slider.value = String(value);
+}
+
+layoutSliders.forEach((slider) => {
+  const targetId = slider.dataset.target;
+  if (!targetId) return;
+  const input = document.getElementById(targetId);
+  if (!input) return;
+  sliderLinkMap.set(input, slider);
+  const fallback = getSliderFallback(input, slider);
+  const initial = parseBgPosition(slider.value);
+  slider.value = String(initial === null ? fallback : initial);
+  slider.addEventListener('input', () => {
+    const parsed = parseBgPosition(slider.value);
+    const value = parsed === null ? getSliderFallback(input, slider) : parsed;
+    slider.value = String(value);
+    input.value = String(value);
+  });
+});
+
+layoutInputs.forEach((input) => {
+  const slider = sliderLinkMap.get(input);
+  if (!slider) return;
+  input.addEventListener('input', () => {
+    const parsed = parseBgPosition(input.value);
+    if (parsed === null) {
+      syncSliderToInput(input);
+      return;
+    }
+    input.value = String(parsed);
+    slider.value = String(parsed);
+  });
+  input.addEventListener('change', () => {
+    const parsed = parseBgPosition(input.value);
+    if (parsed === null) {
+      input.value = '';
+    } else {
+      input.value = String(parsed);
+    }
+    syncSliderToInput(input);
+  });
+  syncSliderToInput(input);
+});
 
 const CAL_DEFAULT_COLOR = '#4b6bff';
 const calendarRows = Array.from(document.querySelectorAll('#calendar-card .calendar-row'));
@@ -750,6 +862,7 @@ function fillLayoutFields(layout, defaults) {
     if (defaultsForOrientation[key] !== undefined) {
       input.placeholder = String(defaultsForOrientation[key]);
     }
+    syncSliderToInput(input);
   });
 }
 
@@ -786,6 +899,7 @@ function resetLayoutToDefaults() {
     const defaultsForOrientation = defaults[orientation] || {};
     if (defaultsForOrientation[key] === undefined) return;
     input.value = String(defaultsForOrientation[key]);
+    syncSliderToInput(input);
   });
 }
 
@@ -901,6 +1015,7 @@ Array.from(document.querySelectorAll('.secret-toggle')).forEach((btn) => {
 if (layoutResetButton) {
   layoutResetButton.addEventListener('click', () => {
     resetLayoutToDefaults();
+    layoutInputs.forEach((input) => syncSliderToInput(input));
     setStatus('#layout-card', '기본값으로 변경되었습니다. 저장을 눌러 적용하세요.');
   });
 }
