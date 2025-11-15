@@ -122,13 +122,18 @@ def _fit_image_for_frame(img: Image.Image) -> Image.Image:
 
 
 def process_uploaded_photo(dest: Path) -> None:
-    """Rotate uploads 90° CCW and letterbox them for the frame canvas."""
+    """Normalize uploaded photos for the frame canvas."""
     if not dest.exists():
         return
+
     with Image.open(dest) as img:
         original_format = img.format or dest.suffix.lstrip(".")
         img = ImageOps.exif_transpose(img)
-        img = img.rotate(90, expand=True)
+
+        width, height = img.size
+        if width > height:
+            img = img.rotate(90, expand=True)
+
         img = _fit_image_for_frame(img)
         _save_pil_image(img, dest, original_format)
 
