@@ -48,6 +48,18 @@
     max-width: var(--W);
     max-height: var(--H);
   }
+  .bg.bg-landscape,
+  .bg2.bg-landscape,
+  .bg.bg-sideways,
+  .bg2.bg-sideways {
+    object-fit: contain;
+    background-size: contain;
+  }
+  .bg.bg-portrait,
+  .bg2.bg-portrait {
+    object-fit: cover;
+    background-size: cover;
+  }
   .bg2 { opacity: 0; }
 
   .top { height:var(--top); display:flex; align-items:center; justify-content:space-between; padding:0 24px; box-sizing:border-box; }
